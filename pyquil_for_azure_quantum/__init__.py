@@ -132,7 +132,11 @@ class AzureQuantumComputer(QuantumComputer):
         return AzureProgram(program, skip_quilc=not to_native_gates)
 
     def run_batch(self, executable: AzureProgram, memory_map: Dict[str, List[List[float]]]) -> List[QAMExecutionResult]:
-        """See ``AzureQuantumMachine.run_batch``."""
+        """Run a sequence of memory values through the program.
+
+        See Also:
+            * [`AzureQuantumMachine.run_batch`][pyquil_for_azure_quantum.AzureQuantumMachine.run_batch]
+        """
         qam = cast(AzureQuantumMachine, self.qam)
         return qam.run_batch(executable, memory_map)
 
@@ -141,16 +145,17 @@ def get_qpu(qpu_name: str) -> AzureQuantumComputer:
     """Get an AzureQuantumComputer targeting a real QPU
 
     These Azure Quantum configuration environment variables __must__ be set:
-        * AZURE_QUANTUM_SUBSCRIPTION_ID: The Azure subscription ID where the Quantum Workspace is located.
-        * AZURE_QUANTUM_WORKSPACE_RG: The Azure resource group where the Quantum Workspace is located.
-        * AZURE_QUANTUM_WORKSPACE_NAME: The name of the Quantum Workspace.
-        * AZURE_QUANTUM_WORKSPACE_LOCATION: The region where the Quantum Workspace is located.
 
-    Credentials for communicating with Azure Quantum should be stored in the following environment variables. If they
-    are not set, this will attempt to open a browser to authenticate:
-        * AZURE_CLIENT_ID
-        * AZURE_CLIENT_SECRET
-        * AZURE_TENANT_ID
+    - AZURE_QUANTUM_SUBSCRIPTION_ID: The Azure subscription ID where the Quantum Workspace is located.
+    - AZURE_QUANTUM_WORKSPACE_RG: The Azure resource group where the Quantum Workspace is located.
+    - AZURE_QUANTUM_WORKSPACE_NAME: The name of the Quantum Workspace.
+    - AZURE_QUANTUM_WORKSPACE_LOCATION: The region where the Quantum Workspace is located.
+
+    If these are not set, this will attempt to open a browser to authenticate:
+
+    - AZURE_CLIENT_ID
+    - AZURE_CLIENT_SECRET
+    - AZURE_TENANT_ID
 
     Raises:
         KeyError: If required environment variables are not set.
@@ -162,16 +167,17 @@ def get_qvm() -> AzureQuantumComputer:
     """Get an AzureQuantumComputer targeting a cloud-hosted QVM
 
     These Azure Quantum configuration environment variables __must__ be set:
-        * AZURE_QUANTUM_SUBSCRIPTION_ID: The Azure subscription ID where the Quantum Workspace is located.
-        * AZURE_QUANTUM_WORKSPACE_RG: The Azure resource group where the Quantum Workspace is located.
-        * AZURE_QUANTUM_WORKSPACE_NAME: The name of the Quantum Workspace.
-        * AZURE_QUANTUM_WORKSPACE_LOCATION: The region where the Quantum Workspace is located.
 
-    Credentials for communicating with Azure Quantum should be stored in the following environment variables. If they
-    are not set, this will attempt to open a browser to authenticate:
-        * AZURE_CLIENT_ID
-        * AZURE_CLIENT_SECRET
-        * AZURE_TENANT_ID
+    - AZURE_QUANTUM_SUBSCRIPTION_ID: The Azure subscription ID where the Quantum Workspace is located.
+    - AZURE_QUANTUM_WORKSPACE_RG: The Azure resource group where the Quantum Workspace is located.
+    - AZURE_QUANTUM_WORKSPACE_NAME: The name of the Quantum Workspace.
+    - AZURE_QUANTUM_WORKSPACE_LOCATION: The region where the Quantum Workspace is located.
+
+    If these are not set, this will attempt to open a browser to authenticate:
+
+    - AZURE_CLIENT_ID
+    - AZURE_CLIENT_SECRET
+    - AZURE_TENANT_ID
 
     Raises:
         KeyError: If required environment variables are not set.
@@ -286,6 +292,8 @@ class AzureQuantumMachine(QAM[AzureJob]):
         Returns:
             A list of ``QAMExecutionResult`` objects, one for each set of parameters.
 
+        ```pycon
+
         >>> import numpy as np
         >>> from pyquil import Program
         >>> from pyquil.gates import CNOT, MEASURE, RX, H
@@ -308,6 +316,8 @@ class AzureQuantumMachine(QAM[AzureJob]):
         >>> results_pi = results[1].readout_data["ro"]
         >>> assert len(results_pi) == 1000
         >>> assert np.mean(results_pi) == 1
+
+        ```
         """
         num_params = None
         for param_name, param_values in memory_map.items():
