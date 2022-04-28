@@ -16,6 +16,12 @@ TEST_PROGRAM = Program(
     MEASURE(0, ("ro", 0)),
     MEASURE(1, ("ro", 1)),
 ).wrap_in_numshots_loop(1000)
+PARAMETRIZED = Program(
+    Declare("ro", "BIT", 1),
+    Declare("theta", "REAL", 1),
+    RX(MemoryReference("theta"), 0),
+    MEASURE(0, ("ro", 0)),
+).wrap_in_numshots_loop(1000)
 QUIL_T_PROGRAM = Program(
     """
 PRAGMA INITIAL_REWIRING "PARTIAL"
@@ -63,14 +69,7 @@ def test_basic_program(qc: AzureQuantumComputer) -> None:
 
 
 def test_parametric_program(qc: AzureQuantumComputer) -> None:
-    compiled = qc.compile(
-        Program(
-            Declare("ro", "BIT", 1),
-            Declare("theta", "REAL", 1),
-            RX(MemoryReference("theta"), 0),
-            MEASURE(0, ("ro", 0)),
-        ).wrap_in_numshots_loop(1000),
-    )
+    compiled = qc.compile(PARAMETRIZED)
 
     all_results = []
     for theta in [0, np.pi, 2 * np.pi]:
@@ -92,3 +91,22 @@ def test_quil_t(qpu: AzureQuantumComputer) -> None:
     results = qpu.run(qpu.compile(QUIL_T_PROGRAM, to_native_gates=False)).readout_data.get("ro")
 
     assert np.mean(results) > 0.5
+
+
+def test_run_batch(qc: AzureQuantumComputer) -> None:
+    compiled = qc.compile(PARAMETRIZED)
+
+    memory_map = {"theta": [[0], [np.pi], [2 * np.pi]]}
+    results = qc.run_batch(compiled, memory_map)
+
+    results_0 = np.mean(results[0].readout_data.get("ro"))
+    results_pi = np.mean(results[1].readout_data.get("ro"))
+    results_2pi = np.mean(results[2].readout_data.get("ro"))
+    if qc.name == "qvm":
+        assert results_0 == 0.0
+        assert results_pi == 1.0
+        assert results_2pi == 0.0
+    else:
+        assert results_0 < 0.2
+        assert results_pi > 0.8
+        assert results_2pi < 0.2
