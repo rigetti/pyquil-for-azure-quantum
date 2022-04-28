@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "pyquil-azure"
+name = "pyquil-azure-quantum"
 version = "0.1.0"
 description = "Allows you to use pyquil to run programs on Azure Quantum"
 authors = ["Dylan Anthony <danthony@rigetti.com>"]
