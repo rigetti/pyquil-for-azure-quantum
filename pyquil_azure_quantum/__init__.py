@@ -1,8 +1,8 @@
 """Run pyquil programs through Azure Quantum
 
    Usage:
-      * Instead of using ``pyquil.get_qc()`` use ``pyquil_azure.get_qpu()`` for QPUs and ``pyquil_azure.get_qvm()``
-        for QVM.
+      * Instead of using ``pyquil.get_qc()`` use ``pyquil_azure_quantum.get_qpu()`` for QPUs and
+        ``pyquil_azure_quantum.get_qvm()`` for QVM.
       * QVM and ``quilc`` do not need to be installed or running locally.
 """
 
@@ -25,14 +25,14 @@ __all__ = ["get_qpu", "get_qvm", "AzureQuantumComputer", "AzureProgram"]
 from dataclasses import dataclass
 from json import loads
 from os import environ
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 from azure.quantum import Job, Workspace
 from azure.quantum.target import Target
 from lazy_object_proxy import Proxy
 from numpy import array, split
-from pyquil import Program, get_qc
-from pyquil.api import QAM, QAMExecutionResult, QuantumComputer
+from pyquil.api import QAM, QAMExecutionResult, QuantumComputer, get_qc
+from pyquil.quil import Program
 from wrapt import ObjectProxy
 
 ParamValue = Union[int, float]
@@ -65,11 +65,11 @@ class AzureProgram(ObjectProxy, Program):  # type: ignore
         """Retrieve the memory map for this program formatted in the way that Azure expects"""
         if self.memory_map is not None:
             return self.memory_map
-        values = self._memory.values
-        if len(values) == 0:
+        memory = self._memory.values
+        if len(memory) == 0:
             return None
         memory_indexes_and_values_per_name: Dict[str, List[Tuple[int, ParamValue]]] = {}
-        for ref, value in values.items():
+        for ref, value in memory.items():
             if ref.name not in memory_indexes_and_values_per_name:
                 memory_indexes_and_values_per_name[ref.name] = []
             memory_indexes_and_values_per_name[ref.name].append((ref.index, value))
@@ -92,7 +92,7 @@ class AzureProgram(ObjectProxy, Program):  # type: ignore
 
 
 # pylint: disable-next=too-few-public-methods
-class AzureQuantumComputer(QuantumComputer):  # type: ignore
+class AzureQuantumComputer(QuantumComputer):
     """
     A ``pyquil.QuantumComputer`` that runs on Azure Quantum.
     """
@@ -188,7 +188,7 @@ class AzureJob:
     executable: AzureProgram
 
 
-class AzureQuantumMachine(QAM[AzureJob]):  # type: ignore
+class AzureQuantumMachine(QAM[AzureJob]):
     """An implementation of QAM which runs programs using Azure Quantum
 
     These Azure Quantum configuration environment variables __must__ be set:
@@ -225,11 +225,11 @@ class AzureQuantumMachine(QAM[AzureJob]):  # type: ignore
         )
 
     # pylint: disable-next=useless-super-delegation
-    def run(self, executable: AzureProgram) -> QAMExecutionResult:
+    def run(self, executable: AzureProgram) -> QAMExecutionResult:  # type: ignore[override]
         """Run the executable and wait for its results"""
         return super().run(executable)
 
-    def execute(self, executable: AzureProgram, name: str = "pyquil-azure-job") -> AzureJob:
+    def execute(self, executable: AzureProgram, name: str = "pyquil-azure-job") -> AzureJob:  # type: ignore[override]
         """Run an AzureProgram on Azure Quantum. Unlike normal QAM this does not accept a ``QuantumExecutable``.
 
         You should build the ``AzureProgram`` via ``AzureQuantumComputer.compile``.
@@ -243,7 +243,7 @@ class AzureQuantumMachine(QAM[AzureJob]):  # type: ignore
             ``get_result()``.
         """
         executable = executable.copy()
-        input_params = {
+        input_params: Dict[str, Any] = {
             "count": executable.num_shots,
             "skipQuilc": executable.skip_quilc,
         }
@@ -311,7 +311,7 @@ class AzureQuantumMachine(QAM[AzureJob]):  # type: ignore
         >>> from pyquil.gates import CNOT, MEASURE, RX, H
         >>> from pyquil.quilatom import MemoryReference
         >>> from pyquil.quilbase import Declare
-        >>> from pyquil_azure import get_qvm
+        >>> from pyquil_azure_quantum import get_qvm
         >>> qvm = get_qvm()
         >>> program = Program(\
              Declare("ro", "BIT", 1), \
@@ -349,7 +349,7 @@ class AzureQuantumMachine(QAM[AzureJob]):  # type: ignore
         combined_result = self.get_result(AzureJob(job, executable))
         if num_params is None or num_params == 1:
             return [combined_result]
-        split_results = split(combined_result.readout_data["ro"], num_params)
+        split_results = split(combined_result.readout_data["ro"], num_params)  # type: ignore
         return [QAMExecutionResult(executable, {"ro": result}) for result in split_results]
 
 

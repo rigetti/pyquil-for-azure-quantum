@@ -18,3 +18,19 @@ jobs:
           poetry install
       - name: Style Checks
         run: poetry run make check-style
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          path: .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+      - name: Install Dependencies
+        run: |
+          pip install poetry
+          poetry install
+      - name: Lint Checks
+        run: poetry run make lint

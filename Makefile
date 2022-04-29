@@ -1,3 +1,8 @@
+dev:
+	make style
+	make lint
+	make test-all
+
 style:
 	isort .
 	black .
@@ -5,3 +10,17 @@ style:
 check-style:
 	isort --check .
 	black --check .
+
+lint:
+	pylint pyquil_azure_quantum
+	pylint test
+	mypy .
+
+test-all:
+	pytest
+
+test-no-qcs:
+	pytest --ignore=test_e2e_qcs_operations
+
+test-requires-qcs:
+	pytest -k test_e2e_qcs_operations
