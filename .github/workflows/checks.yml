@@ -80,16 +80,12 @@ jobs:
     name: Test (QCS)
     strategy:
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
         python:
           - 3.7
           - 3.8
           - 3.9
           - "3.10"
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
@@ -108,8 +104,10 @@ jobs:
       - name: Setup QCS Settings
         run: |
           mkdir -p ~/.qcs
-          echo ${{ secrets.QCS_SETTINGS_FILE }} > ~/.qcs/settings.toml
-          echo ${{ secrets.QCS_SECRETS_FILE }} > ~/.qcs/secrets.toml
+          echo '${{ secrets.QCS_SETTINGS_FILE }}' > ~/.qcs/settings.toml
+          echo '${{ secrets.QCS_SECRETS_FILE }}' > ~/.qcs/secrets.toml
+      - name: Start quilc
+        run: docker run -d -p 5555:5555 rigetti/quilc -S
       - name: Test
         run: poetry run make test-requires-qcs
         env:
