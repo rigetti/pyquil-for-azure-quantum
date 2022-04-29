@@ -76,3 +76,48 @@ jobs:
           AZURE_QUANTUM_WORKSPACE_RG: ${{ secrets.AZURE_QUANTUM_WORKSPACE_RG }}
           AZURE_QUANTUM_WORKSPACE_NAME: ${{ secrets.AZURE_QUANTUM_WORKSPACE_NAME }}
           AZURE_QUANTUM_WORKSPACE_LOCATION: ${{ secrets.AZURE_QUANTUM_WORKSPACE_LOCATION }}
+  test_qcs:
+    name: Test (QCS)
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+        python:
+          - 3.7
+          - 3.8
+          - 3.9
+          - "3.10"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/cache@v3
+        with:
+          path: .venv
+          key: ${{ runner.os }}-python-${{ matrix.python }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-python-${{ matrix.python }}-poetry-
+      - name: Install Dependencies
+        run: |
+          pip install poetry
+          poetry install
+      - name: Setup QCS Settings
+        run: |
+          mkdir -p ~/.qcs
+          echo ${{ secrets.QCS_SETTINGS_FILE }} > ~/.qcs/settings.toml
+          echo ${{ secrets.QCS_SECRETS_FILE }} > ~/.qcs/secrets.toml
+      - name: Test
+        run: poetry run make test-requires-qcs
+        env:
+          TEST_QUANTUM_PROCESSOR: Aspen-M-1
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_QUANTUM_SUBSCRIPTION_ID: ${{ secrets.AZURE_QUANTUM_SUBSCRIPTION_ID }}
+          AZURE_QUANTUM_WORKSPACE_RG: ${{ secrets.AZURE_QUANTUM_WORKSPACE_RG }}
+          AZURE_QUANTUM_WORKSPACE_NAME: ${{ secrets.AZURE_QUANTUM_WORKSPACE_NAME }}
+          AZURE_QUANTUM_WORKSPACE_LOCATION: ${{ secrets.AZURE_QUANTUM_WORKSPACE_LOCATION }}
