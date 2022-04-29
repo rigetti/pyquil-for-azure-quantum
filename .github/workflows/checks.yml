@@ -16,6 +16,7 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install poetry
+          poetry config virtualenvs.in-project true
           poetry install
       - name: Style Checks
         run: poetry run make check-style
@@ -33,6 +34,7 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install poetry
+          poetry config virtualenvs.in-project true
           poetry install
       - name: Lint Checks
         run: poetry run make lint
@@ -64,6 +66,7 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install poetry
+          poetry config virtualenvs.in-project true
           poetry install
       - name: Test
         run: poetry run make test-no-qcs
@@ -100,6 +103,7 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install poetry
+          poetry config virtualenvs.in-project true
           poetry install
       - name: Setup QCS Settings
         run: |
