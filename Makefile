@@ -20,7 +20,7 @@ test-all:
 	pytest
 
 test-no-qcs:
-	pytest --ignore=test_e2e_qcs_operations
+	pytest -k "not test_e2e_qcs_operations"
 
 test-requires-qcs:
 	pytest -k test_e2e_qcs_operations
