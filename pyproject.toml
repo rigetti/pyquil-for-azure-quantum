@@ -12,6 +12,7 @@ azure-quantum = "*"
 lazy-object-proxy = "^1.7.1"
 wrapt = "^1.14.0"
 numpy = "^1.21.6"
+scipy = "^1.6.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.1.1"
