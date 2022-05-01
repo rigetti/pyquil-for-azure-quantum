@@ -6,8 +6,8 @@ This library allows you to use [`pyquil`] to run programs on [Azure Quantum](htt
 
 Generally, you use [`pyquil`] normally, with a few differences:
 
-1. Instead of `pyquil.get_qc()`, you will use either `pyquil_azure.get_qvm()` or `pyquil_azure.get_qpu()`.
-2. You do not need to have `qvm` or `quilc` running in order to run programs through `pyquil_azure`. You may still run them if you wish to run QVM locally instead of passing through Azure or if you wish to precompile your programs (e.g., to inspect the exact Quil that will run).
+1. Instead of `pyquil.get_qc()`, you will use either `pyquil_azure_quantum.get_qvm()` or `pyquil_azure_quantum.get_qpu()`.
+2. You do not need to have `qvm` or `quilc` running in order to run programs through `pyquil_azure_quantum`. You may still run them if you wish to run QVM locally instead of passing through Azure or if you wish to precompile your programs (e.g., to inspect the exact Quil that will run).
 3. You do not need a QCS account or credentials unless you wish to manually inspect the details of the QPU (e.g., list all qubits).
 4. You **must** have these environment variables set:
    1. AZURE_QUANTUM_SUBSCRIPTION_ID: The Azure subscription ID where the Quantum Workspace is located.

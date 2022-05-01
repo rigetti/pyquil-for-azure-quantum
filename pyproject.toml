@@ -6,14 +6,20 @@ authors = ["Dylan Anthony <danthony@rigetti.com>"]
 license = "Apache-2.0"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = ">=3.7,<3.11"
 pyquil = "^3.1.0"
 azure-quantum = "*"
 lazy-object-proxy = "^1.7.1"
 wrapt = "^1.14.0"
+numpy = "^1.21.6"
+scipy = "^1.6.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.1.1"
+mypy = "^0.950"
+isort = "^5.10.1"
+black = "^22.3.0"
+pylint = "^2.13.7"
 
 [tool.black]
 line-length = 120
