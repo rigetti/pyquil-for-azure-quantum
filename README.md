@@ -70,6 +70,37 @@ exe = qpu.compile(native_quil, to_native_gates=False)  # Skip quilc in the cloud
 results = qpu.run(exe)
 ```
 
+### 3. Running Parametrized Circuits in a Batch
+
+When you have a program which should be run across multiple parameters, you can submit all the parameters at once to significantly improve performance.
+
+```python
+import numpy as np
+from pyquil_azure_quantum import get_qpu
+from pyquil.gates import MEASURE, RX
+from pyquil.quil import Program
+from pyquil.quilbase import Declare
+from pyquil.quilatom import MemoryReference
+
+
+program = Program(
+    Declare("ro", "BIT", 1),
+    Declare("theta", "REAL", 1),
+    RX(MemoryReference("theta"), 0),
+    MEASURE(0, ("ro", 0)),
+).wrap_in_numshots_loop(1000)
+
+qpu = get_qpu("Aspen-11")
+compiled = qpu.compile(program)
+
+memory_map = {"theta": [[0.0], [np.pi], [2 * np.pi]]}
+results = qpu.run_batch(compiled, memory_map)  # This is a list of results, one for each parameter set.
+
+results_0 = results[0].readout_data["ro"]
+results_pi = results[1].readout_data["ro"]
+results_2pi = results[2].readout_data["ro"]
+```
+
 
 [`azure-quantum`]: https://github.com/microsoft/qdk-python
 [`pyquil`]: https://pyquil-docs.rigetti.com/en/stable/

@@ -300,7 +300,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
                 as the number of slots in the register. So if the register was ``DECLARE theta REAL[2]`` then the key
                 in the dictionary would be ``theta`` and the value would be a list of lists of length 2. The entire
                 program will be run (for shot count) as many times as there are values in the list. **All values (outer
-                lists)must be of the same length**.
+                lists) must be of the same length**.
             name: An optional name for the job which will show up in the Azure Quantum UI.
 
         Returns:
