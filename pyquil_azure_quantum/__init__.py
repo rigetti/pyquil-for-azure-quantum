@@ -23,9 +23,8 @@
 __all__ = ["get_qpu", "get_qvm", "AzureQuantumComputer", "AzureProgram"]
 
 from dataclasses import dataclass
-from json import loads
 from os import environ
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Optional, Tuple, Union, cast
 
 from azure.quantum import Job, Workspace
 from azure.quantum.target.rigetti import InputParams, Result, Rigetti
@@ -261,7 +260,9 @@ class AzureQuantumMachine(QAM[AzureJob]):
         Raises:
             RuntimeError: If the job fails.
         """
-        result = Result(execute_response.job)
+        job = execute_response.job
+        job.wait_until_completed()
+        result = Result(job)
         numpified = {k: array(v) for k, v in result.data_per_register.items()}
         return QAMExecutionResult(
             executable=execute_response.executable,
