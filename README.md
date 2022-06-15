@@ -17,6 +17,60 @@ Generally, you use [`pyquil`] normally, with a few differences:
 5. You **may** [set environment variables][azure auth] to authenticated with Azure. If you do not, a browser will open to the Azure portal to authenticate.
 6. Whenever possible, you should prefer using `AzureQuantumComputer.run_batch()` over `Program.write_memory(); AzureQuantumComputer.run()` to run programs which have multiple parameters. Calling `write_memory()` followed by `run()` will still work but will be much slower than running a batch of parameters all at once.
 
+
+## Examples
+
+### 1. Leveraging Hosted QVM and quilc
+
+With this program, you do not need to run `qvm` nor `quilc` locally in order to leverage them, as they can run through Azure Quantum.
+
+```python
+from pyquil_azure_quantum import get_qpu, get_qvm
+from pyquil.gates import CNOT, MEASURE, H
+from pyquil.quil import Program
+from pyquil.quilbase import Declare
+
+program = Program(
+    Declare("ro", "BIT", 2),
+    H(0),
+    CNOT(0, 1),
+    MEASURE(0, ("ro", 0)),
+    MEASURE(1, ("ro", 1)),
+).wrap_in_numshots_loop(1000)
+
+qpu = get_qpu("Aspen-11")
+qvm = get_qvm()
+
+exe = qpu.compile(program)  # This does not run quilc yet.
+results = qpu.run(exe)  # Quilc will run in the cloud before executing the program.
+qvm_results = qvm.run(exe)  # This runs the program on QVM in the cloud, not locally.
+```
+
+### 2. Running quilc Locally
+
+You can optionally run quilc yourself and disable the use of quilc in the cloud.
+
+```python
+from pyquil_azure_quantum import get_qpu
+from pyquil.gates import CNOT, MEASURE, H
+from pyquil.quil import Program
+from pyquil.quilbase import Declare
+
+
+program = Program(
+    Declare("ro", "BIT", 2),
+    H(0),
+    CNOT(0, 1),
+    MEASURE(0, ("ro", 0)),
+    MEASURE(1, ("ro", 1)),
+).wrap_in_numshots_loop(1000)
+qpu = get_qpu("Aspen-11")
+native_quil = qpu.compiler.quil_to_native_quil(program)  # quilc must be running locally to compile
+exe = qpu.compile(native_quil, to_native_gates=False)  # Skip quilc in the cloud
+results = qpu.run(exe)
+```
+
+
 [`azure-quantum`]: https://github.com/microsoft/qdk-python
 [`pyquil`]: https://pyquil-docs.rigetti.com/en/stable/
 [azure auth]: https://docs.microsoft.com/en-us/azure/quantum/optimization-authenticate-service-principal#authenticate-as-the-service-principal
