@@ -14,7 +14,7 @@ Generally, you use [`pyquil`] normally, with a few differences:
    2. `AZURE_QUANTUM_WORKSPACE_RG`: The Azure resource group where the Quantum Workspace is located. 
    3. `AZURE_QUANTUM_WORKSPACE_NAME`: The name of the Quantum Workspace.
    4. `AZURE_QUANTUM_WORKSPACE_LOCATION`: The region where the Quantum Workspace is located.
-5. You **may** [set environment variables][azure auth] to authenticated with Azure. If you do not, a browser will open to the Azure portal to authenticate.
+5. You **may** [set environment variables][azure auth] to authenticate with Azure. If you do not, a browser will open to the Azure portal to authenticate.
 6. Whenever possible, you should prefer using `AzureQuantumComputer.run_batch()` over `Program.write_memory(); AzureQuantumComputer.run()` to run programs which have multiple parameters. Calling `write_memory()` followed by `run()` will still work but will be much slower than running a batch of parameters all at once.
 
 
