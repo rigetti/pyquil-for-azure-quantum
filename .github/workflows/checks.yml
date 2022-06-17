@@ -71,7 +71,7 @@ jobs:
       - name: Test
         run: poetry run make test-no-qcs
         env:
-          TEST_QUANTUM_PROCESSOR: Aspen-M-1
+          TEST_QUANTUM_PROCESSOR: Aspen-11
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -115,7 +115,7 @@ jobs:
       - name: Test
         run: poetry run make test-requires-qcs
         env:
-          TEST_QUANTUM_PROCESSOR: Aspen-M-1
+          TEST_QUANTUM_PROCESSOR: Aspen-11
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
