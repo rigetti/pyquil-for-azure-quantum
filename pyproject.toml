@@ -1,14 +1,14 @@
 [tool.poetry]
 name = "pyquil-azure-quantum"
 version = "0.1.0"
-description = "Allows you to use pyquil to run programs on Azure Quantum"
+description = "Run Quil programs on Microsoft Azure Quantum using pyQuil"
 authors = ["Dylan Anthony <danthony@rigetti.com>"]
 license = "Apache-2.0"
 
 [tool.poetry.dependencies]
 python = ">=3.7,<3.11"
 pyquil = "^3.1.0"
-azure-quantum = "*"
+azure-quantum = "^0.24.210930"
 lazy-object-proxy = "^1.7.1"
 wrapt = "^1.14.0"
 numpy = "^1.21.6"
