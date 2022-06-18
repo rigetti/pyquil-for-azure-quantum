@@ -23,12 +23,11 @@
 __all__ = ["get_qpu", "get_qvm", "AzureQuantumComputer", "AzureProgram"]
 
 from dataclasses import dataclass
-from json import loads
 from os import environ
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Optional, Tuple, Union, cast
 
 from azure.quantum import Job, Workspace
-from azure.quantum.target import Target
+from azure.quantum.target.rigetti import InputParams, Result, Rigetti
 from lazy_object_proxy import Proxy
 from numpy import array, split
 from pyquil.api import QAM, QAMExecutionResult, QuantumComputer, get_qc
@@ -215,13 +214,9 @@ class AzureQuantumMachine(QAM[AzureJob]):
             location=environ["AZURE_QUANTUM_WORKSPACE_LOCATION"],
         )
         # noinspection PyTypeChecker
-        self._target = Target(
+        self._target = Rigetti(
             workspace=self._workspace,
             name=target,
-            input_data_format="rigetti.quil.v1",
-            output_data_format="rigetti.quil-results.v1",
-            provider_id="rigetti",
-            content_type="text/plain",
         )
 
     # pylint: disable-next=useless-super-delegation
@@ -243,13 +238,13 @@ class AzureQuantumMachine(QAM[AzureJob]):
             ``get_result()``.
         """
         executable = executable.copy()
-        input_params: Dict[str, Any] = {
-            "count": executable.num_shots,
-            "skipQuilc": executable.skip_quilc,
-        }
+        input_params = InputParams(
+            count=executable.num_shots,
+            skip_quilc=executable.skip_quilc,
+        )
         memory = executable.get_memory()
         if memory is not None:
-            input_params["substitutions"] = memory
+            input_params.substitutions = memory
 
         job = self._target.submit(
             str(executable),
@@ -267,23 +262,8 @@ class AzureQuantumMachine(QAM[AzureJob]):
         """
         job = execute_response.job
         job.wait_until_completed()
-        details = job.details
-        if details.status != "Succeeded":
-            raise RuntimeError(
-                "Cannot retrieve results as job execution failed "
-                f"(status: {details.status}."
-                f"error: {details.error_data})"
-            )
-        json_bytes = cast(bytes, job.download_data(details.output_data_uri))
-        data = cast(Dict[str, List[List[_RawData]]], loads(json_bytes))
-        unjsoned: Dict[str, List[List[Union[int, float, complex]]]] = {}
-        for key, value in data.items():
-            if isinstance(value[0][0], list):  # Complex numbers are returned as lists in JSON
-                unjsoned[key] = [[complex(entry[0], entry[1]) for entry in shot] for shot in value]  # type: ignore
-            else:
-                unjsoned[key] = value  # type: ignore
-
-        numpified = {k: array(v) for k, v in unjsoned.items()}
+        result = Result(job)
+        numpified = {k: array(v) for k, v in result.data_per_register.items()}
         return QAMExecutionResult(
             executable=execute_response.executable,
             readout_data=numpified,
@@ -339,7 +319,9 @@ class AzureQuantumMachine(QAM[AzureJob]):
                     f"{param_name} has length {len(param_values)} but {num_params} were expected."
                 )
 
-        input_params = {"count": executable.num_shots, "skipQuilc": executable.skip_quilc, "substitutions": memory_map}
+        input_params = InputParams(
+            count=executable.num_shots, skip_quilc=executable.skip_quilc, substitutions=memory_map
+        )
 
         job = self._target.submit(
             str(executable),
