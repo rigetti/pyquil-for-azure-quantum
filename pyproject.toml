@@ -1,0 +1,54 @@
+[tool.poetry]
+name = "pyquil-for-azure-quantum"
+version = "0.1.0"
+description = "Run Quil programs on Microsoft Azure Quantum using pyQuil"
+authors = ["Dylan Anthony <danthony@rigetti.com>"]
+license = "Apache-2.0"
+
+[tool.poetry.dependencies]
+python = ">=3.7,<3.11"
+pyquil = "^3.1.0"
+azure-quantum = "^0.24.210930"
+lazy-object-proxy = "^1.7.1"
+wrapt = "^1.14.0"
+numpy = "^1.21.6"
+scipy = "^1.6.1"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.1.1"
+mypy = "^0.950"
+isort = "^5.10.1"
+black = "^22.3.0"
+pylint = "^2.13.7"
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.mypy]
+strict = true
+
+[[tool.mypy.overrides]]
+ignore_missing_imports = true
+module = [
+    "azure.quantum.*",
+    "lazy_object_proxy",
+    "numpy",
+    "pytest.*",
+    "pyquil.*",
+    "wrapt",
+]
+
+[tool.pylint.messages_control]
+disable = [
+    "import-error",
+    "line-too-long",
+]
+
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
