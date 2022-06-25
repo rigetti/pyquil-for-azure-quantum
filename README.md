@@ -1,10 +1,10 @@
 # pyquil-for-azure-quantum
 
-This library allows you to use [`pyquil`] to run programs on [Azure Quantum](https://azure.microsoft.com/en-us/services/quantum/) against Rigetti targets. Internally, it leverages the [`azure-quantum`] package.
+This library allows you to use [pyQuil] to run programs on [Azure Quantum](https://azure.microsoft.com/en-us/services/quantum/) against Rigetti targets. Internally, it leverages the [azure-quantum] package.
 
 ## Usage
 
-Generally, you use [`pyquil`] normally, with a few differences:
+Generally, you use [pyQuil] normally, with a few differences:
 
 1. Instead of `pyquil.get_qc()`, you will use either `pyquil_azure_quantum.get_qvm()` or `pyquil_azure_quantum.get_qpu()`.
 2. You do not need to have `qvm` or `quilc` running in order to run programs through `pyquil_azure_quantum`. You may still run them if you wish to run QVM locally instead of passing through Azure or if you wish to precompile your programs (e.g., to inspect the exact Quil that will run).
@@ -103,6 +103,6 @@ results_2pi = results[2].readout_data["ro"]
 
 > Microsoft, Microsoft Azure, and Azure Quantum are trademarks of the Microsoft group of companies. 
 
-[`azure-quantum`]: https://github.com/microsoft/qdk-python
-[`pyquil`]: https://pyquil-docs.rigetti.com/en/stable/
+[azure-quantum]: https://github.com/microsoft/qdk-python
+[pyQuil]: https://pyquil-docs.rigetti.com/en/stable/
 [azure auth]: https://docs.microsoft.com/en-us/azure/quantum/optimization-authenticate-service-principal#authenticate-as-the-service-principal
