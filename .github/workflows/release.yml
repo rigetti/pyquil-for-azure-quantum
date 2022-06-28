@@ -1,0 +1,24 @@
+on:
+  release:
+    types:
+      - released
+      - prereleased
+
+jobs:
+  pypi_upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          path: .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+      - name: Install Dependencies
+        run: |
+          pip install poetry
+          poetry config virtualenvs.in-project true
+          poetry install
+      - name: Publish to PyPI
+        run: poetry publish --build -u __token__ -p ${{ secrets.PYPI_TOKEN }}
