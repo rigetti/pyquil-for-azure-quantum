@@ -13,9 +13,9 @@ from pyquil_for_azure_quantum import AzureQuantumComputer, get_qpu, get_qvm
 # pylint: disable-next=redefined-outer-name,invalid-name
 def qc(request: pytest.FixtureRequest, qpu: AzureQuantumComputer, qvm: AzureQuantumComputer) -> AzureQuantumComputer:
     """Parametrized fixture for running on both QVM and the selected QPU."""
-    if request.param == "QPU":  # type: ignore
+    if request.param == "QPU":
         return qpu
-    if request.param == "QVM":  # type: ignore
+    if request.param == "QVM":
         return qvm
     raise ValueError("Invalid params")
 
