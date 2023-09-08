@@ -330,16 +330,28 @@ class AzureQuantumMachine(QAM[AzureJob]):
         if combined_result.data.result_data.is_qpu():
             qpu_data = combined_result.data.result_data.to_qpu()
             mappings = qpu_data.mappings
-            split_results: List[Union[List[int], List[float], List[complex]]] = split(qpu_data.readout_values["ro"].inner, num_params)
-            output = [QAMExecutionResult(executable, ExecutionData(ResultData.from_qpu(
-                QPUResultData(mappings=mappings, readout_values={"ro": array(result)})
-            ))) for result in split_results]
+            split_results: List[Union[List[int], List[float], List[complex]]] = split(
+                qpu_data.readout_values["ro"].inner, num_params
+            )
+            output = [
+                QAMExecutionResult(
+                    executable,
+                    ExecutionData(
+                        ResultData.from_qpu(QPUResultData(mappings=mappings, readout_values={"ro": array(result)}))
+                    ),
+                )
+                for result in split_results
+            ]
         else:
             qvm_data = combined_result.data.result_data.to_qvm().to_raw_readout_data().memory
             split_results = split(qvm_data["ro"], num_params)
-            output = [QAMExecutionResult(executable, ExecutionData(ResultData.from_qvm(
-                QVMResultData.from_memory_map(memory={"ro": array(result)})
-            ))) for result in split_results]
+            output = [
+                QAMExecutionResult(
+                    executable,
+                    ExecutionData(ResultData.from_qvm(QVMResultData.from_memory_map(memory={"ro": array(result)}))),
+                )
+                for result in split_results
+            ]
         return output
 
 
