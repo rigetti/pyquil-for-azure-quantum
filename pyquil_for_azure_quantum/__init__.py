@@ -24,14 +24,17 @@ __all__ = ["get_qpu", "get_qvm", "AzureQuantumComputer", "AzureProgram"]
 
 from dataclasses import dataclass
 from os import environ
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 from azure.quantum import Job, Workspace
-from azure.quantum.target.rigetti import InputParams, Result, Rigetti
+from azure.quantum.target.rigetti import InputParams, Result, Rigetti, RigettiTarget
 from lazy_object_proxy import Proxy
 from numpy import array, split
-from pyquil.api import QAM, QAMExecutionResult, QuantumComputer, get_qc
+from pyquil.api import QAM, MemoryMap, QAMExecutionResult, QuantumComputer, get_qc
 from pyquil.quil import Program
+from qcs_sdk import ExecutionData, ResultData  # pylint: disable=no-name-in-module
+from qcs_sdk.qpu import QPUResultData  # pylint: disable=no-name-in-module
+from qcs_sdk.qvm import QVMResultData  # pylint: disable=no-name-in-module
 from wrapt import ObjectProxy
 
 ParamValue = Union[int, float]
@@ -46,11 +49,9 @@ class AzureProgram(ObjectProxy, Program):  # type: ignore
         self,
         program: Program,
         skip_quilc: bool,
-        memory_map: Optional[Dict[str, List[List[ParamValue]]]] = None,
     ) -> None:
         super().__init__(program)
         self.skip_quilc = skip_quilc
-        self.memory_map = memory_map
 
     def copy(self) -> "AzureProgram":
         """Perform a shallow copy of this program.
@@ -59,35 +60,6 @@ class AzureProgram(ObjectProxy, Program):  # type: ignore
         performing a copy.
         """
         return AzureProgram(self.__wrapped__.copy(), self.skip_quilc)
-
-    def get_memory(self) -> Optional[Dict[str, List[List[ParamValue]]]]:
-        """Retrieve the memory map for this program formatted in the way that Azure expects"""
-        if self.memory_map is not None:
-            return self.memory_map
-        memory = self._memory.values
-        if len(memory) == 0:
-            return None
-        memory_indexes_and_values_per_name: Dict[str, List[Tuple[int, ParamValue]]] = {}
-        for ref, value in memory.items():
-            if ref.name not in memory_indexes_and_values_per_name:
-                memory_indexes_and_values_per_name[ref.name] = []
-            memory_indexes_and_values_per_name[ref.name].append((ref.index, value))
-        memory_indexes_and_values_per_name = {
-            k: sorted(v, key=lambda x: x[0]) for k, v in memory_indexes_and_values_per_name.items()
-        }
-        substitutions: Dict[str, List[List[float]]] = {}
-        for name, indexes_and_values in memory_indexes_and_values_per_name.items():
-            values = []
-            expected_index = 0
-            for index, value in indexes_and_values:
-                while index != expected_index:
-                    # Pad missing values with zeros, just like pyquil does when patching
-                    values.append(0.0)
-                    expected_index += 1
-                values.append(value)
-                expected_index += 1
-            substitutions[name] = [values]
-        return substitutions
 
 
 # pylint: disable-next=too-few-public-methods
@@ -226,11 +198,22 @@ class AzureQuantumMachine(QAM[AzureJob]):
         )
 
     # pylint: disable-next=useless-super-delegation
-    def run(self, executable: AzureProgram) -> QAMExecutionResult:  # type: ignore[override]
+    def run(  # type: ignore[override]
+        self,
+        executable: AzureProgram,
+        memory_map: Optional[MemoryMap] = None,
+        **kwargs: Any,
+    ) -> QAMExecutionResult:
         """Run the executable and wait for its results"""
-        return super().run(executable)
+        return super().run(executable, memory_map, **kwargs)
 
-    def execute(self, executable: AzureProgram, name: str = "pyquil-azure-job") -> AzureJob:  # type: ignore[override]
+    def execute(  # type: ignore[override]
+        self,
+        executable: AzureProgram,
+        memory_map: Optional[MemoryMap] = None,
+        name: str = "pyquil-azure-job",
+        **kwargs: Any,
+    ) -> AzureJob:
         """Run an AzureProgram on Azure Quantum. Unlike normal QAM this does not accept a ``QuantumExecutable``.
 
         You should build the ``AzureProgram`` via ``AzureQuantumComputer.compile``.
@@ -247,10 +230,8 @@ class AzureQuantumMachine(QAM[AzureJob]):
         input_params = InputParams(
             count=executable.num_shots,
             skip_quilc=executable.skip_quilc,
+            substitutions=memory_map,
         )
-        memory = executable.get_memory()
-        if memory is not None:
-            input_params.substitutions = memory
 
         job = self._target.submit(
             str(executable),
@@ -269,10 +250,15 @@ class AzureQuantumMachine(QAM[AzureJob]):
         job = execute_response.job
         job.wait_until_completed()
         result = Result(job)
-        numpified = {k: array(v) for k, v in result.data_per_register.items()}
+        data = ExecutionData(
+            result_data=(ResultData.from_qvm(QVMResultData.from_memory_map(result.data_per_register)))
+            if self._target.name in RigettiTarget.simulators()
+            # TODO: where should the mappings come from?
+            else (ResultData.from_qpu(QPUResultData(mappings={}, readout_values=result.data_per_register))),
+        )
         return QAMExecutionResult(
             executable=execute_response.executable,
-            readout_data=numpified,
+            data=data,
         )
 
     def run_batch(
@@ -341,8 +327,20 @@ class AzureQuantumMachine(QAM[AzureJob]):
         combined_result = self.get_result(AzureJob(job, executable))
         if num_params is None or num_params == 1:
             return [combined_result]
-        split_results = split(combined_result.readout_data["ro"], num_params)  # type: ignore
-        return [QAMExecutionResult(executable, {"ro": result}) for result in split_results]
+        if combined_result.data.result_data.is_qpu():
+            qpu_data = combined_result.data.result_data.to_qpu()
+            mappings = qpu_data.mappings
+            split_results: List[Union[List[int], List[float], List[complex]]] = split(qpu_data.readout_values["ro"].inner, num_params)
+            output = [QAMExecutionResult(executable, ExecutionData(ResultData.from_qpu(
+                QPUResultData(mappings=mappings, readout_values={"ro": array(result)})
+            ))) for result in split_results]
+        else:
+            qvm_data = combined_result.data.result_data.to_qvm().to_raw_readout_data().memory
+            split_results = split(qvm_data["ro"], num_params)
+            output = [QAMExecutionResult(executable, ExecutionData(ResultData.from_qvm(
+                QVMResultData.from_memory_map(memory={"ro": array(result)})
+            ))) for result in split_results]
+        return output
 
 
 _RawData = Union[int, float, List[float]]
