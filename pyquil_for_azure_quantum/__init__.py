@@ -24,7 +24,7 @@ __all__ = ["get_qpu", "get_qvm", "AzureQuantumComputer", "AzureProgram"]
 
 from dataclasses import dataclass
 from os import environ
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Sequence, TypeVar, Union, cast
 
 from azure.quantum import Job, Workspace
 from azure.quantum.target.rigetti import InputParams, Result, Rigetti, RigettiTarget
@@ -32,8 +32,8 @@ from lazy_object_proxy import Proxy
 from numpy import array, split
 from pyquil.api import QAM, MemoryMap, QAMExecutionResult, QuantumComputer, get_qc
 from pyquil.quil import Program
-from qcs_sdk import ExecutionData, ResultData  # pylint: disable=no-name-in-module
-from qcs_sdk.qpu import QPUResultData  # pylint: disable=no-name-in-module
+from qcs_sdk import ExecutionData, ResultData, RegisterData  # pylint: disable=no-name-in-module
+from qcs_sdk.qpu import QPUResultData, ReadoutValues  # pylint: disable=no-name-in-module
 from qcs_sdk.qvm import QVMResultData  # pylint: disable=no-name-in-module
 from wrapt import ObjectProxy
 
@@ -154,7 +154,7 @@ def get_qvm() -> AzureQuantumComputer:
     Raises:
         KeyError: If required environment variables are not set.
     """
-    return AzureQuantumComputer(target="rigetti.sim.qvm", qpu_name="qvm")
+    return AzureQuantumComputer(target=RigettiTarget.QVM.value, qpu_name="qvm")
 
 
 @dataclass
@@ -196,16 +196,6 @@ class AzureQuantumMachine(QAM[AzureJob]):
             workspace=self._workspace,
             name=target,
         )
-
-    # pylint: disable-next=useless-super-delegation
-    def run(  # type: ignore[override]
-        self,
-        executable: AzureProgram,
-        memory_map: Optional[MemoryMap] = None,
-        **kwargs: Any,
-    ) -> QAMExecutionResult:
-        """Run the executable and wait for its results"""
-        return super().run(executable, memory_map, **kwargs)
 
     def execute(  # type: ignore[override]
         self,
@@ -250,12 +240,18 @@ class AzureQuantumMachine(QAM[AzureJob]):
         job = execute_response.job
         job.wait_until_completed()
         result = Result(job)
-        data = ExecutionData(
-            result_data=(ResultData.from_qvm(QVMResultData.from_memory_map(result.data_per_register)))
-            if self._target.name in RigettiTarget.simulators()
+
+        if self._target.name in RigettiTarget.simulators():
+            memory = {k: RegisterData(v) for k, v in result.data_per_register.items()}
+            result_data = ResultData.from_qvm(QVMResultData.from_memory_map(memory=memory))
+        else:
+            # TODO `v` here is a Register, aka `List[List[T]]`, but ReadoutValues expects a `List[T]`
+            readout_values = {k: ReadoutValues(v[0]) for k, v in result.data_per_register.items()}
             # TODO: where should the mappings come from?
-            else (ResultData.from_qpu(QPUResultData(mappings={}, readout_values=result.data_per_register))),
-        )
+            mappings = {}
+            result_data = ResultData.from_qpu(QPUResultData(mappings=mappings, readout_values=readout_values))
+
+        data = ExecutionData(result_data=result_data)
         return QAMExecutionResult(
             executable=execute_response.executable,
             data=data,
@@ -315,40 +311,31 @@ class AzureQuantumMachine(QAM[AzureJob]):
                     f"{param_name} has length {len(param_values)} but {num_params} were expected."
                 )
 
-        input_params = InputParams(
-            count=executable.num_shots, skip_quilc=executable.skip_quilc, substitutions=memory_map
-        )
-
-        job = self._target.submit(
-            str(executable),
-            name=name,
-            input_params=input_params,
-        )
-        combined_result = self.get_result(AzureJob(job, executable))
+        combined_result = self.run(executable, memory_map, name=name)
         if num_params is None or num_params == 1:
             return [combined_result]
-        if combined_result.data.result_data.is_qpu():
-            qpu_data = combined_result.data.result_data.to_qpu()
-            mappings = qpu_data.mappings
-            split_results: List[Union[List[int], List[float], List[complex]]] = split(
-                qpu_data.readout_values["ro"].inner, num_params
-            )
+
+        result_data = combined_result.data.result_data
+        if result_data.is_qpu():
+            qpu_data = result_data.to_qpu()
+            qpu_ro_data = qpu_data.readout_values["ro"].inner()
+            split_results = split(array(qpu_ro_data), num_params)
             output = [
                 QAMExecutionResult(
                     executable,
                     ExecutionData(
-                        ResultData.from_qpu(QPUResultData(mappings=mappings, readout_values={"ro": array(result)}))
+                        ResultData.from_qpu(QPUResultData(mappings=qpu_data.mappings, readout_values={"ro": ReadoutValues(result)}))
                     ),
                 )
                 for result in split_results
             ]
         else:
-            qvm_data = combined_result.data.result_data.to_qvm().to_raw_readout_data().memory
-            split_results = split(qvm_data["ro"], num_params)
+            qvm_ro_data = result_data.to_register_map()["ro"].to_ndarray()
+            split_results = split(qvm_ro_data, num_params)
             output = [
                 QAMExecutionResult(
                     executable,
-                    ExecutionData(ResultData.from_qvm(QVMResultData.from_memory_map(memory={"ro": array(result)}))),
+                    ExecutionData(ResultData.from_qvm(QVMResultData.from_memory_map(memory={"ro": RegisterData(result.tolist())}))),
                 )
                 for result in split_results
             ]

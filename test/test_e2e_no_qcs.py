@@ -31,7 +31,7 @@ MEASURE 0 ro
 # pylint: disable-next=invalid-name
 def test_basic_program(qc: AzureQuantumComputer, basic_program: Program) -> None:
     """A smoke test of a very basic program running through Azure Quantum with minimal assertions"""
-    results = qc.run(qc.compile(basic_program)).readout_data["ro"]
+    results = qc.run(qc.compile(basic_program)).get_register_map()["ro"]
     assert results is not None
     assert results.shape == (1000, 2)
 
@@ -43,8 +43,8 @@ def test_parametric_program(qc: AzureQuantumComputer) -> None:
 
     all_results = []
     for theta in [0, np.pi, 2 * np.pi]:
-        compiled.write_memory(region_name="theta", value=theta)
-        results = qc.run(compiled).readout_data["ro"]
+        memory_map: Dict[str, List[List[float]]] = {"theta": [[theta]]}
+        results = qc.run(executable=compiled, memory_map=memory_map).get_register_map()["ro"]
         assert results is not None
         all_results.append(np.mean(results))
 
@@ -60,7 +60,7 @@ def test_parametric_program(qc: AzureQuantumComputer) -> None:
 
 def test_quil_t(qpu: AzureQuantumComputer) -> None:
     """Test skipping ``quilc`` on the backend by passing a program which will not compile (Quil-T)"""
-    results = qpu.run(qpu.compile(QUIL_T_PROGRAM, to_native_gates=False)).readout_data["ro"]
+    results = qpu.run(qpu.compile(QUIL_T_PROGRAM, to_native_gates=False)).get_register_map()["ro"]
     assert results is not None
 
     assert np.mean(results) > 0.5
@@ -74,13 +74,13 @@ def test_run_batch(qc: AzureQuantumComputer) -> None:
     memory_map: Dict[str, List[List[float]]] = {"theta": [[0], [np.pi], [2 * np.pi]]}
     results = qc.run_batch(compiled, memory_map)
 
-    results_0 = results[0].readout_data["ro"]
+    results_0 = results[0].get_register_map()["ro"]
     assert results_0 is not None
     results_0_mean = np.mean(results_0)
-    results_pi = results[1].readout_data["ro"]
+    results_pi = results[1].get_register_map()["ro"]
     assert results_pi is not None
     results_pi_mean = np.mean(results_pi)
-    results_2pi = results[2].readout_data["ro"]
+    results_2pi = results[2].get_register_map()["ro"]
     assert results_2pi is not None
     results_2pi_mean = np.mean(results_2pi)
     if qc.name == "qvm":
