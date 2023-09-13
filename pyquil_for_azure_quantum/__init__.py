@@ -241,15 +241,11 @@ class AzureQuantumMachine(QAM[AzureJob]):
         job.wait_until_completed()
         result = Result(job)
 
-        if self._target.name in RigettiTarget.simulators():
-            memory = {k: RegisterData(v) for k, v in result.data_per_register.items()}
-            result_data = ResultData.from_qvm(QVMResultData.from_memory_map(memory=memory))
-        else:
-            # TODO `v` here is a Register, aka `List[List[T]]`, but ReadoutValues expects a `List[T]`
-            readout_values = {k: ReadoutValues(v[0]) for k, v in result.data_per_register.items()}
-            # TODO: where should the mappings come from?
-            mappings = {}
-            result_data = ResultData.from_qpu(QPUResultData(mappings=mappings, readout_values=readout_values))
+        # TODO: as of https://github.com/microsoft/qdk-python/blob/4d6f7f75c8c7d8467f87936b1aaef449de1e0bf6/azure-quantum/azure/quantum/target/rigetti/result.py#L47
+        # both QVM and QC result shapes take the memory-map form as in the QVMRedustData.
+        # When the Rigetti target returns results with mappings, the QPUResultData can be constructed.
+        memory = {k: RegisterData(v) for k, v in result.data_per_register.items()}
+        result_data = ResultData.from_qvm(QVMResultData.from_memory_map(memory=memory))
 
         data = ExecutionData(result_data=result_data)
         return QAMExecutionResult(
@@ -315,30 +311,15 @@ class AzureQuantumMachine(QAM[AzureJob]):
         if num_params is None or num_params == 1:
             return [combined_result]
 
-        result_data = combined_result.data.result_data
-        if result_data.is_qpu():
-            qpu_data = result_data.to_qpu()
-            qpu_ro_data = qpu_data.readout_values["ro"].inner()
-            split_results = split(array(qpu_ro_data), num_params)
-            output = [
-                QAMExecutionResult(
-                    executable,
-                    ExecutionData(
-                        ResultData.from_qpu(QPUResultData(mappings=qpu_data.mappings, readout_values={"ro": ReadoutValues(result)}))
-                    ),
-                )
-                for result in split_results
-            ]
-        else:
-            qvm_ro_data = result_data.to_register_map()["ro"].to_ndarray()
-            split_results = split(qvm_ro_data, num_params)
-            output = [
-                QAMExecutionResult(
-                    executable,
-                    ExecutionData(ResultData.from_qvm(QVMResultData.from_memory_map(memory={"ro": RegisterData(result.tolist())}))),
-                )
-                for result in split_results
-            ]
+        ro_data = combined_result.data.result_data.to_register_map().get("ro").to_ndarray()
+        split_results = split(ro_data, num_params)
+        output = [
+            QAMExecutionResult(
+                executable,
+                ExecutionData(ResultData.from_qvm(QVMResultData.from_memory_map(memory={"ro": RegisterData(result.tolist())}))),
+            )
+            for result in split_results
+        ]
         return output
 
 
