@@ -43,7 +43,7 @@ def test_parametric_program(qc: AzureQuantumComputer) -> None:
 
     all_results = []
     for theta in [0, np.pi, 2 * np.pi]:
-        memory_map: Dict[str, List[List[float]]] = {"theta": [[theta]]}
+        memory_map: Dict[str, List[float]] = {"theta": [theta]}
         results = qc.run(executable=compiled, memory_map=memory_map).get_register_map().get("ro")
         assert results is not None
         all_results.append(np.mean(results))

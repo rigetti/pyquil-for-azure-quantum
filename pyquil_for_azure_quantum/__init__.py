@@ -24,15 +24,16 @@ __all__ = ["get_qpu", "get_qvm", "AzureQuantumComputer", "AzureProgram"]
 
 from dataclasses import dataclass
 from os import environ
-from typing import Any, Dict, List, Optional, Sequence, TypeVar, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Sequence, TypeVar, Union, cast
 
 from azure.quantum import Job, Workspace
 from azure.quantum.target.rigetti import InputParams, Result, Rigetti, RigettiTarget
 from lazy_object_proxy import Proxy
 from numpy import array, split
 from pyquil.api import QAM, MemoryMap, QAMExecutionResult, QuantumComputer, get_qc
+from pyquil.api._abstract_compiler import QuantumExecutable
 from pyquil.quil import Program
-from qcs_sdk import ExecutionData, ResultData, RegisterData  # pylint: disable=no-name-in-module
+from qcs_sdk import ExecutionData, RegisterData, ResultData  # pylint: disable=no-name-in-module
 from qcs_sdk.qpu import QPUResultData, ReadoutValues  # pylint: disable=no-name-in-module
 from qcs_sdk.qvm import QVMResultData  # pylint: disable=no-name-in-module
 from wrapt import ObjectProxy
@@ -220,9 +221,8 @@ class AzureQuantumMachine(QAM[AzureJob]):
         input_params = InputParams(
             count=executable.num_shots,
             skip_quilc=executable.skip_quilc,
-            substitutions=memory_map,
+            substitutions={k: [v] for k, v in memory_map.items()} if memory_map is not None else None,
         )
-
         job = self._target.submit(
             str(executable),
             name=name,
@@ -241,6 +241,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
         job.wait_until_completed()
         result = Result(job)
 
+        # pylint: disable-next=fixme
         # TODO: as of https://github.com/microsoft/qdk-python/blob/4d6f7f75c8c7d8467f87936b1aaef449de1e0bf6/azure-quantum/azure/quantum/target/rigetti/result.py#L47
         # both QVM and QC result shapes take the memory-map form as in the QVMRedustData.
         # When the Rigetti target returns results with mappings, the QPUResultData can be constructed.
@@ -307,20 +308,34 @@ class AzureQuantumMachine(QAM[AzureJob]):
                     f"{param_name} has length {len(param_values)} but {num_params} were expected."
                 )
 
-        combined_result = self.run(executable, memory_map, name=name)
+        executable = executable.copy()
+        input_params = InputParams(
+            count=executable.num_shots,
+            skip_quilc=executable.skip_quilc,
+            substitutions=memory_map,
+        )
+        job = self._target.submit(
+            str(executable),
+            name=name,
+            input_params=input_params,
+        )
+        azure_job = AzureJob(job=job, executable=executable)
+        combined_result = self.get_result(azure_job)
         if num_params is None or num_params == 1:
             return [combined_result]
 
-        ro_data = combined_result.data.result_data.to_register_map().get("ro").to_ndarray()
-        split_results = split(ro_data, num_params)
+        ro_matrix = combined_result.data.result_data.to_register_map().get_register_matrix("ro")
+        if ro_matrix is None:
+            return []
+
+        split_results = split(ro_matrix.to_ndarray(), num_params)
         output = [
             QAMExecutionResult(
                 executable,
-                ExecutionData(ResultData.from_qvm(QVMResultData.from_memory_map(memory={"ro": RegisterData(result.tolist())}))),
+                ExecutionData(
+                    ResultData.from_qvm(QVMResultData.from_memory_map(memory={"ro": RegisterData(result.tolist())}))
+                ),
             )
             for result in split_results
         ]
         return output
-
-
-_RawData = Union[int, float, List[float]]
