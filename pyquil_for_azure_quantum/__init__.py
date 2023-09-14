@@ -74,7 +74,7 @@ class AzureQuantumComputer(QuantumComputer):
         compiler = Proxy(lambda: get_qc(qpu_name).compiler)
         super().__init__(name=qpu_name, qam=qam, compiler=compiler)
 
-    # pylint: disable-next=no-self-use,unused-argument
+    # pylint: disable-next=unused-argument
     def compile(
         self,
         program: Program,
@@ -230,7 +230,6 @@ class AzureQuantumMachine(QAM[AzureJob]):
         )
         return AzureJob(job=job, executable=executable)
 
-    # pylint: disable-next=no-self-use
     def get_result(self, execute_response: AzureJob) -> QAMExecutionResult:
         """Wait for a ``Job`` to complete, then return the results
 
