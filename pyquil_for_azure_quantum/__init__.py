@@ -24,17 +24,15 @@ __all__ = ["get_qpu", "get_qvm", "AzureQuantumComputer", "AzureProgram"]
 
 from dataclasses import dataclass
 from os import environ
-from typing import Any, Dict, List, Mapping, Optional, Sequence, TypeVar, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 from azure.quantum import Job, Workspace
 from azure.quantum.target.rigetti import InputParams, Result, Rigetti, RigettiTarget
 from lazy_object_proxy import Proxy
-from numpy import array, split
+from numpy import split
 from pyquil.api import QAM, MemoryMap, QAMExecutionResult, QuantumComputer, get_qc
-from pyquil.api._abstract_compiler import QuantumExecutable
 from pyquil.quil import Program
 from qcs_sdk import ExecutionData, RegisterData, ResultData  # pylint: disable=no-name-in-module
-from qcs_sdk.qpu import QPUResultData, ReadoutValues  # pylint: disable=no-name-in-module
 from qcs_sdk.qvm import QVMResultData  # pylint: disable=no-name-in-module
 from wrapt import ObjectProxy
 
