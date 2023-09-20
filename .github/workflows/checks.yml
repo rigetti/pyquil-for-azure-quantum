@@ -20,7 +20,7 @@ jobs:
             ${{ runner.os }}-poetry-
       - name: Install Dependencies
         run: |
-          pip install poetry==$POETRY_VERSION
+          pip install poetry==${{ env.POETRY_VERSION }}
           poetry config virtualenvs.in-project true
           poetry install
       - name: Style Checks
@@ -38,7 +38,7 @@ jobs:
             ${{ runner.os }}-poetry-
       - name: Install Dependencies
         run: |
-          pip install poetry==$POETRY_VERSION
+          pip install poetry==${{ env.POETRY_VERSION }}
           poetry config virtualenvs.in-project true
           poetry install
       - name: Lint Checks
@@ -69,7 +69,7 @@ jobs:
             ${{ runner.os }}-python-${{ matrix.python }}-poetry-
       - name: Install Dependencies
         run: |
-          pip install poetry==$POETRY_VERSION
+          pip install poetry==${{ env.POETRY_VERSION }}
           poetry config virtualenvs.in-project true
           poetry install
       - name: Test
@@ -105,7 +105,7 @@ jobs:
             ${{ runner.os }}-python-${{ matrix.python }}-poetry-
       - name: Install Dependencies
         run: |
-          pip install poetry==$POETRY_VERSION
+          pip install poetry==${{ env.POETRY_VERSION }}
           poetry config virtualenvs.in-project true
           poetry install
       - name: Setup QCS Settings
