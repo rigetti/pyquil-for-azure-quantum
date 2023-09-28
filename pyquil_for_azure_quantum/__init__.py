@@ -240,7 +240,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
 
         # pylint: disable-next=fixme
         # TODO: as of https://github.com/microsoft/qdk-python/blob/4d6f7f75c8c7d8467f87936b1aaef449de1e0bf6/azure-quantum/azure/quantum/target/rigetti/result.py#L47
-        # both QVM and QC result shapes take the memory-map form as in the QVMRedustData.
+        # both QVM and QC result shapes take the memory-map form as in the QVMResultData.
         # When the Rigetti target returns results with mappings, the QPUResultData can be constructed.
         memory = {k: RegisterData(v) for k, v in result.data_per_register.items()}
         result_data = ResultData.from_qvm(QVMResultData.from_memory_map(memory=memory))
