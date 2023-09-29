@@ -96,9 +96,9 @@ compiled = qpu.compile(program)
 memory_map = {"theta": [[0.0], [np.pi], [2 * np.pi]]}
 results = qpu.run_batch(compiled, memory_map)  # This is a list of results, one for each parameter set.
 
-results_0 = results[0].readout_data["ro"]
-results_pi = results[1].readout_data["ro"]
-results_2pi = results[2].readout_data["ro"]
+results_0 = results[0].get_register_map().get("ro")
+results_pi = results[1].get_register_map().get("ro")
+results_2pi = results[2].get_register_map().get("ro")
 ```
 
 > Microsoft, Microsoft Azure, and Azure Quantum are trademarks of the Microsoft group of companies. 

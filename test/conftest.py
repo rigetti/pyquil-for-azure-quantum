@@ -26,7 +26,7 @@ def qpu() -> AzureQuantumComputer:
     quantum_processor_id = environ.get("TEST_QUANTUM_PROCESSOR")
 
     if quantum_processor_id is None:
-        raise Exception("'TEST_QUANTUM_PROCESSOR' env var required for e2e tests.")
+        raise ValueError("'TEST_QUANTUM_PROCESSOR' env var required for e2e tests.")
 
     return get_qpu(
         quantum_processor_id,

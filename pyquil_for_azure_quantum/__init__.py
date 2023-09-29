@@ -24,14 +24,16 @@ __all__ = ["get_qpu", "get_qvm", "AzureQuantumComputer", "AzureProgram"]
 
 from dataclasses import dataclass
 from os import environ
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 from azure.quantum import Job, Workspace
-from azure.quantum.target.rigetti import InputParams, Result, Rigetti
+from azure.quantum.target.rigetti import InputParams, Result, Rigetti, RigettiTarget
 from lazy_object_proxy import Proxy
-from numpy import array, split
-from pyquil.api import QAM, QAMExecutionResult, QuantumComputer, get_qc
+from numpy import split
+from pyquil.api import QAM, MemoryMap, QAMExecutionResult, QuantumComputer, get_qc
 from pyquil.quil import Program
+from qcs_sdk import ExecutionData, RegisterData, ResultData  # pylint: disable=no-name-in-module
+from qcs_sdk.qvm import QVMResultData  # pylint: disable=no-name-in-module
 from wrapt import ObjectProxy
 
 ParamValue = Union[int, float]
@@ -46,11 +48,9 @@ class AzureProgram(ObjectProxy, Program):  # type: ignore
         self,
         program: Program,
         skip_quilc: bool,
-        memory_map: Optional[Dict[str, List[List[ParamValue]]]] = None,
     ) -> None:
         super().__init__(program)
         self.skip_quilc = skip_quilc
-        self.memory_map = memory_map
 
     def copy(self) -> "AzureProgram":
         """Perform a shallow copy of this program.
@@ -59,35 +59,6 @@ class AzureProgram(ObjectProxy, Program):  # type: ignore
         performing a copy.
         """
         return AzureProgram(self.__wrapped__.copy(), self.skip_quilc)
-
-    def get_memory(self) -> Optional[Dict[str, List[List[ParamValue]]]]:
-        """Retrieve the memory map for this program formatted in the way that Azure expects"""
-        if self.memory_map is not None:
-            return self.memory_map
-        memory = self._memory.values
-        if len(memory) == 0:
-            return None
-        memory_indexes_and_values_per_name: Dict[str, List[Tuple[int, ParamValue]]] = {}
-        for ref, value in memory.items():
-            if ref.name not in memory_indexes_and_values_per_name:
-                memory_indexes_and_values_per_name[ref.name] = []
-            memory_indexes_and_values_per_name[ref.name].append((ref.index, value))
-        memory_indexes_and_values_per_name = {
-            k: sorted(v, key=lambda x: x[0]) for k, v in memory_indexes_and_values_per_name.items()
-        }
-        substitutions: Dict[str, List[List[float]]] = {}
-        for name, indexes_and_values in memory_indexes_and_values_per_name.items():
-            values = []
-            expected_index = 0
-            for index, value in indexes_and_values:
-                while index != expected_index:
-                    # Pad missing values with zeros, just like pyquil does when patching
-                    values.append(0.0)
-                    expected_index += 1
-                values.append(value)
-                expected_index += 1
-            substitutions[name] = [values]
-        return substitutions
 
 
 # pylint: disable-next=too-few-public-methods
@@ -101,7 +72,7 @@ class AzureQuantumComputer(QuantumComputer):
         compiler = Proxy(lambda: get_qc(qpu_name).compiler)
         super().__init__(name=qpu_name, qam=qam, compiler=compiler)
 
-    # pylint: disable-next=no-self-use,unused-argument
+    # pylint: disable-next=unused-argument
     def compile(
         self,
         program: Program,
@@ -182,7 +153,7 @@ def get_qvm() -> AzureQuantumComputer:
     Raises:
         KeyError: If required environment variables are not set.
     """
-    return AzureQuantumComputer(target="rigetti.sim.qvm", qpu_name="qvm")
+    return AzureQuantumComputer(target=RigettiTarget.QVM.value, qpu_name="qvm")
 
 
 @dataclass
@@ -225,12 +196,13 @@ class AzureQuantumMachine(QAM[AzureJob]):
             name=target,
         )
 
-    # pylint: disable-next=useless-super-delegation
-    def run(self, executable: AzureProgram) -> QAMExecutionResult:  # type: ignore[override]
-        """Run the executable and wait for its results"""
-        return super().run(executable)
-
-    def execute(self, executable: AzureProgram, name: str = "pyquil-azure-job") -> AzureJob:  # type: ignore[override]
+    def execute(  # type: ignore[override]
+        self,
+        executable: AzureProgram,
+        memory_map: Optional[MemoryMap] = None,
+        name: str = "pyquil-azure-job",
+        **_kwargs: Any,  # unused, but defined here to match QAM superclass.
+    ) -> AzureJob:
         """Run an AzureProgram on Azure Quantum. Unlike normal QAM this does not accept a ``QuantumExecutable``.
 
         You should build the ``AzureProgram`` via ``AzureQuantumComputer.compile``.
@@ -247,11 +219,8 @@ class AzureQuantumMachine(QAM[AzureJob]):
         input_params = InputParams(
             count=executable.num_shots,
             skip_quilc=executable.skip_quilc,
+            substitutions={k: [v] for k, v in memory_map.items()} if memory_map is not None else None,
         )
-        memory = executable.get_memory()
-        if memory is not None:
-            input_params.substitutions = memory
-
         job = self._target.submit(
             str(executable),
             name=name,
@@ -259,7 +228,6 @@ class AzureQuantumMachine(QAM[AzureJob]):
         )
         return AzureJob(job=job, executable=executable)
 
-    # pylint: disable-next=no-self-use
     def get_result(self, execute_response: AzureJob) -> QAMExecutionResult:
         """Wait for a ``Job`` to complete, then return the results
 
@@ -269,10 +237,18 @@ class AzureQuantumMachine(QAM[AzureJob]):
         job = execute_response.job
         job.wait_until_completed()
         result = Result(job)
-        numpified = {k: array(v) for k, v in result.data_per_register.items()}
+
+        # pylint: disable-next=fixme
+        # TODO: as of https://github.com/microsoft/qdk-python/blob/4d6f7f75c8c7d8467f87936b1aaef449de1e0bf6/azure-quantum/azure/quantum/target/rigetti/result.py#L47
+        # both QVM and QC result shapes take the memory-map form as in the QVMResultData.
+        # When the Rigetti target returns results with mappings, the QPUResultData can be constructed.
+        memory = {k: RegisterData(v) for k, v in result.data_per_register.items()}
+        result_data = ResultData.from_qvm(QVMResultData.from_memory_map(memory=memory))
+
+        data = ExecutionData(result_data=result_data)
         return QAMExecutionResult(
             executable=execute_response.executable,
-            readout_data=numpified,
+            data=data,
         )
 
     def run_batch(
@@ -329,20 +305,34 @@ class AzureQuantumMachine(QAM[AzureJob]):
                     f"{param_name} has length {len(param_values)} but {num_params} were expected."
                 )
 
+        executable = executable.copy()
         input_params = InputParams(
-            count=executable.num_shots, skip_quilc=executable.skip_quilc, substitutions=memory_map
+            count=executable.num_shots,
+            skip_quilc=executable.skip_quilc,
+            substitutions=memory_map,
         )
-
         job = self._target.submit(
             str(executable),
             name=name,
             input_params=input_params,
         )
-        combined_result = self.get_result(AzureJob(job, executable))
+        azure_job = AzureJob(job=job, executable=executable)
+        combined_result = self.get_result(azure_job)
         if num_params is None or num_params == 1:
             return [combined_result]
-        split_results = split(combined_result.readout_data["ro"], num_params)  # type: ignore
-        return [QAMExecutionResult(executable, {"ro": result}) for result in split_results]
 
+        ro_matrix = combined_result.data.result_data.to_register_map().get_register_matrix("ro")
+        if ro_matrix is None:
+            return []
 
-_RawData = Union[int, float, List[float]]
+        split_results = split(ro_matrix.to_ndarray(), num_params)
+        output = [
+            QAMExecutionResult(
+                executable,
+                ExecutionData(
+                    ResultData.from_qvm(QVMResultData.from_memory_map(memory={"ro": RegisterData(result.tolist())}))
+                ),
+            )
+            for result in split_results
+        ]
+        return output
