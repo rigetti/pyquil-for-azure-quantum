@@ -55,6 +55,7 @@ jobs:
           - 3.8
           - 3.9
           - "3.10"
+          - "3.11"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -91,6 +92,7 @@ jobs:
           - 3.8
           - 3.9
           - "3.10"
+          - "3.11"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3

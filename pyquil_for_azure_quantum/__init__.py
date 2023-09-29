@@ -201,7 +201,6 @@ class AzureQuantumMachine(QAM[AzureJob]):
         executable: AzureProgram,
         memory_map: Optional[MemoryMap] = None,
         name: str = "pyquil-azure-job",
-        **kwargs: Any,
     ) -> AzureJob:
         """Run an AzureProgram on Azure Quantum. Unlike normal QAM this does not accept a ``QuantumExecutable``.
 
