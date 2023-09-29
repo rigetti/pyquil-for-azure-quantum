@@ -15,7 +15,7 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.11"
+python = ">=3.8,<3.12"
 pyquil = "^4.0.0"
 azure-quantum = ">=0.27,<1.0"
 lazy-object-proxy = "^1.7.1"
