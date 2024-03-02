@@ -22,7 +22,7 @@ All code should be committed on a non-`main` branch (or from a fork of the `main
 
 ## Release Process
 
-There are currently no releases for this project, consumers are expected to use the latest version of the project via git. When this project becomes public, it will be released as-needed on PyPI.
+This package is released on PyPI and is automatically published when a new GitHub release is created.
 
 [`poetry`]: https://python-poetry.org
 [`pipx`]: https://pypa.github.io/pipx/
