@@ -30,14 +30,7 @@ from azure.quantum import Job, Workspace
 from azure.quantum.target.rigetti import InputParams, Result, Rigetti, RigettiTarget
 from lazy_object_proxy import Proxy
 from numpy import split
-from pyquil.api import (
-    QAM,
-    ExecutionOptions,
-    MemoryMap,
-    QAMExecutionResult,
-    QuantumComputer,
-    get_qc,
-)
+from pyquil.api import QAM, ExecutionOptions, MemoryMap, QAMExecutionResult, QuantumComputer, get_qc
 from pyquil.quil import Program
 from qcs_sdk import ExecutionData, RegisterData, ResultData  # pylint: disable=no-name-in-module
 from qcs_sdk.qvm import QVMResultData  # pylint: disable=no-name-in-module
@@ -144,9 +137,7 @@ def get_qpu(qpu_name: str) -> AzureQuantumComputer:
     Raises:
         KeyError: If required environment variables are not set.
     """
-    return AzureQuantumComputer(
-        target=f"rigetti.qpu.{qpu_name.lower()}", qpu_name=qpu_name
-    )
+    return AzureQuantumComputer(target=f"rigetti.qpu.{qpu_name.lower()}", qpu_name=qpu_name)
 
 
 def get_qvm() -> AzureQuantumComputer:
@@ -235,9 +226,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
         input_params = InputParams(
             count=executable.num_shots,
             skip_quilc=executable.skip_quilc,
-            substitutions={k: [v] for k, v in memory_map.items()}
-            if memory_map is not None
-            else None,
+            substitutions={k: [v] for k, v in memory_map.items()} if memory_map is not None else None,
         )
         job = self._target.submit(
             str(executable),
@@ -345,11 +334,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
                 results.append(combined_result)
                 continue
 
-            ro_matrix = (
-                combined_result.data.result_data.to_register_map().get_register_matrix(
-                    "ro"
-                )
-            )
+            ro_matrix = combined_result.data.result_data.to_register_map().get_register_matrix("ro")
             if ro_matrix is None:
                 continue
 
@@ -358,9 +343,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
                     executable,
                     ExecutionData(
                         ResultData.from_qvm(
-                            QVMResultData.from_memory_map(
-                                memory={"ro": RegisterData(split_result.tolist())}
-                            )
+                            QVMResultData.from_memory_map(memory={"ro": RegisterData(split_result.tolist())})
                         )
                     ),
                 )
