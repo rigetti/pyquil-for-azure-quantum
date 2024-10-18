@@ -3,6 +3,7 @@
 from typing import Dict, List
 
 import numpy as np
+from pyquil.api import MemoryMap
 from pyquil.gates import MEASURE, RX
 from pyquil.quil import Program
 from pyquil.quilatom import MemoryReference
@@ -71,7 +72,7 @@ def test_run_batch(qc: AzureQuantumComputer) -> None:
     """Test the ``run_batch`` interface which should be much faster than normal parametrization"""
     compiled = qc.compile(PARAMETRIZED)
 
-    memory_map: Dict[str, List[List[float]]] = {"theta": [[0], [np.pi], [2 * np.pi]]}
+    memory_map: MemoryMap = {"theta": [0, np.pi, 2 * np.pi]}
     results = qc.run_batch(compiled, memory_map)
 
     results_0 = results[0].get_register_map().get("ro")
