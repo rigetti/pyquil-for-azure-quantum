@@ -24,13 +24,20 @@ __all__ = ["get_qpu", "get_qvm", "AzureQuantumComputer", "AzureProgram"]
 
 from dataclasses import dataclass
 from os import environ
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, Iterable, List, Optional, Union, cast
 
 from azure.quantum import Job, Workspace
 from azure.quantum.target.rigetti import InputParams, Result, Rigetti, RigettiTarget
 from lazy_object_proxy import Proxy
 from numpy import split
-from pyquil.api import QAM, MemoryMap, QAMExecutionResult, QuantumComputer, get_qc
+from pyquil.api import (
+    QAM,
+    ExecutionOptions,
+    MemoryMap,
+    QAMExecutionResult,
+    QuantumComputer,
+    get_qc,
+)
 from pyquil.quil import Program
 from qcs_sdk import ExecutionData, RegisterData, ResultData  # pylint: disable=no-name-in-module
 from qcs_sdk.qvm import QVMResultData  # pylint: disable=no-name-in-module
@@ -103,16 +110,19 @@ class AzureQuantumComputer(QuantumComputer):
         """
         return AzureProgram(program, skip_quilc=not to_native_gates)
 
-    def run_batch(
-        self, executable: AzureProgram, memory_map: Dict[str, List[List[float]]]
+    def run_batch(  # type: ignore
+        self,
+        executable: AzureProgram,
+        memory_map: MemoryMap,
+        **__kwargs: Any,
     ) -> List[QAMExecutionResult]:
         """Run a sequence of memory values through the program.
 
         See Also:
-            * [`AzureQuantumMachine.run_batch`][pyquil_for_azure_quantum.AzureQuantumMachine.run_batch]
+            * [`AzureQuantumMachine.execute_with_memory_map_batch`][pyquil_for_azure_quantum.AzureQuantumMachine.execute_with_memory_map_batch]
         """
         qam = cast(AzureQuantumMachine, self.qam)
-        return qam.run_batch(executable, memory_map)
+        return qam.execute_with_memory_map_batch(executable, [memory_map])
 
 
 def get_qpu(qpu_name: str) -> AzureQuantumComputer:
@@ -214,6 +224,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
 
         Args:
             executable: The AzureProgram to run.
+            memory_map: An optional set of parameter names to parameter values to use for execution.
             name: An optional name for the job which will show up in the Azure Quantum UI.
 
         Returns:
@@ -258,21 +269,21 @@ class AzureQuantumMachine(QAM[AzureJob]):
             data=data,
         )
 
-    def run_batch(
+    def execute_with_memory_map_batch(  # type: ignore
         self,
         executable: AzureProgram,
-        memory_map: Dict[str, List[List[float]]],
+        memory_maps: Iterable[MemoryMap],
         name: str = "pyquil-azure-job",
+        **kwargs: Any,
     ) -> List[QAMExecutionResult]:
         """Run the executable for each set of parameters in the ``memory_map``.
 
         Args:
             executable: The AzureProgram to run.
-            memory_map: A dictionary mapping parameter names to lists of parameter values. Each value is a list as long
-                as the number of slots in the register. So if the register was ``DECLARE theta REAL[2]`` then the key
-                in the dictionary would be ``theta`` and the value would be a list of lists of length 2. The entire
-                program will be run (for shot count) as many times as there are values in the list. **All values (outer
-                lists) must be of the same length**.
+            memory_map: An iterable containing a ``MemoryMaps`` with desired mapping of parameter names to lists of parameter values.
+                Each value is a list as long as the number of slots in the register. So if the register was ``DECLARE theta REAL[2]``
+                then the key in the dictionary would be ``theta`` and the value would be a list of lists of length 2. The entire program
+                will be run (for shot count) as many times as there are values in the list. **All values (outer lists) must be of the same length**.
             name: An optional name for the job which will show up in the Azure Quantum UI.
 
         Returns:
@@ -305,50 +316,54 @@ class AzureQuantumMachine(QAM[AzureJob]):
 
         ```
         """
-        num_params = None
-        for param_name, param_values in memory_map.items():
-            if num_params is None:
-                num_params = len(param_values)
-            elif num_params != len(param_values):
-                raise ValueError(
-                    "All parameter values must be of the same length. "
-                    f"{param_name} has length {len(param_values)} but {num_params} were expected."
-                )
-
-        executable = executable.copy()
-        input_params = InputParams(
-            count=executable.num_shots,
-            skip_quilc=executable.skip_quilc,
-            substitutions=memory_map,
-        )
-        job = self._target.submit(
-            str(executable),
-            name=name,
-            input_params=input_params,
-        )
-        azure_job = AzureJob(job=job, executable=executable)
-        combined_result = self.get_result(azure_job)
-        if num_params is None or num_params == 1:
-            return [combined_result]
-
-        ro_matrix = (
-            combined_result.data.result_data.to_register_map().get_register_matrix("ro")
-        )
-        if ro_matrix is None:
-            return []
-
-        split_results = split(ro_matrix.to_ndarray(), num_params)
-        output = [
-            QAMExecutionResult(
-                executable,
-                ExecutionData(
-                    ResultData.from_qvm(
-                        QVMResultData.from_memory_map(
-                            memory={"ro": RegisterData(result.tolist())}
-                        )
+        results = []
+        for memory_map in memory_maps:
+            num_params = None
+            for param_name, param_values in memory_map.items():
+                if num_params is None:
+                    num_params = len(param_values)
+                elif num_params != len(param_values):
+                    raise ValueError(
+                        "All parameter values must be of the same length. "
+                        f"{param_name} has length {len(param_values)} but {num_params} were expected."
                     )
-                ),
+
+            executable = executable.copy()
+            input_params = InputParams(
+                count=executable.num_shots,
+                skip_quilc=executable.skip_quilc,
+                substitutions=memory_map,
             )
-            for result in split_results
-        ]
-        return output
+            job = self._target.submit(
+                str(executable),
+                name=name,
+                input_params=input_params,
+            )
+            azure_job = AzureJob(job=job, executable=executable)
+            combined_result = self.get_result(azure_job)
+            if num_params is None or num_params == 1:
+                results.append(combined_result)
+                continue
+
+            ro_matrix = (
+                combined_result.data.result_data.to_register_map().get_register_matrix(
+                    "ro"
+                )
+            )
+            if ro_matrix is None:
+                continue
+
+            results += [
+                QAMExecutionResult(
+                    executable,
+                    ExecutionData(
+                        ResultData.from_qvm(
+                            QVMResultData.from_memory_map(
+                                memory={"ro": RegisterData(split_result.tolist())}
+                            )
+                        )
+                    ),
+                )
+                for split_result in split(ro_matrix.to_ndarray(), num_params)
+            ]
+        return results
