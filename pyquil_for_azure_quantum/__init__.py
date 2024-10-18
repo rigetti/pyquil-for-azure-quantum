@@ -68,6 +68,7 @@ class AzureQuantumComputer(QuantumComputer):
     """
 
     def __init__(self, *, target: str, qpu_name: str):
+        # pylint: disable=abstract-class-instantiated
         qam = AzureQuantumMachine(target=target)
         compiler = Proxy(lambda: get_qc(qpu_name).compiler)
         super().__init__(name=qpu_name, qam=qam, compiler=compiler)
@@ -102,7 +103,9 @@ class AzureQuantumComputer(QuantumComputer):
         """
         return AzureProgram(program, skip_quilc=not to_native_gates)
 
-    def run_batch(self, executable: AzureProgram, memory_map: Dict[str, List[List[float]]]) -> List[QAMExecutionResult]:
+    def run_batch(
+        self, executable: AzureProgram, memory_map: Dict[str, List[List[float]]]
+    ) -> List[QAMExecutionResult]:
         """Run a sequence of memory values through the program.
 
         See Also:
@@ -131,7 +134,9 @@ def get_qpu(qpu_name: str) -> AzureQuantumComputer:
     Raises:
         KeyError: If required environment variables are not set.
     """
-    return AzureQuantumComputer(target=f"rigetti.qpu.{qpu_name.lower()}", qpu_name=qpu_name)
+    return AzureQuantumComputer(
+        target=f"rigetti.qpu.{qpu_name.lower()}", qpu_name=qpu_name
+    )
 
 
 def get_qvm() -> AzureQuantumComputer:
@@ -219,7 +224,9 @@ class AzureQuantumMachine(QAM[AzureJob]):
         input_params = InputParams(
             count=executable.num_shots,
             skip_quilc=executable.skip_quilc,
-            substitutions={k: [v] for k, v in memory_map.items()} if memory_map is not None else None,
+            substitutions={k: [v] for k, v in memory_map.items()}
+            if memory_map is not None
+            else None,
         )
         job = self._target.submit(
             str(executable),
@@ -252,7 +259,10 @@ class AzureQuantumMachine(QAM[AzureJob]):
         )
 
     def run_batch(
-        self, executable: AzureProgram, memory_map: Dict[str, List[List[float]]], name: str = "pyquil-azure-job"
+        self,
+        executable: AzureProgram,
+        memory_map: Dict[str, List[List[float]]],
+        name: str = "pyquil-azure-job",
     ) -> List[QAMExecutionResult]:
         """Run the executable for each set of parameters in the ``memory_map``.
 
@@ -321,7 +331,9 @@ class AzureQuantumMachine(QAM[AzureJob]):
         if num_params is None or num_params == 1:
             return [combined_result]
 
-        ro_matrix = combined_result.data.result_data.to_register_map().get_register_matrix("ro")
+        ro_matrix = (
+            combined_result.data.result_data.to_register_map().get_register_matrix("ro")
+        )
         if ro_matrix is None:
             return []
 
@@ -330,7 +342,11 @@ class AzureQuantumMachine(QAM[AzureJob]):
             QAMExecutionResult(
                 executable,
                 ExecutionData(
-                    ResultData.from_qvm(QVMResultData.from_memory_map(memory={"ro": RegisterData(result.tolist())}))
+                    ResultData.from_qvm(
+                        QVMResultData.from_memory_map(
+                            memory={"ro": RegisterData(result.tolist())}
+                        )
+                    )
                 ),
             )
             for result in split_results
