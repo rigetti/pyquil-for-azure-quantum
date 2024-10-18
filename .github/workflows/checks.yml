@@ -52,14 +52,14 @@ jobs:
           - windows-latest
           - macos-latest
         python:
-          - 3.8
           - 3.9
           - "3.10"
           - "3.11"
+          - "3.12"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
       - uses: actions/cache@v3
@@ -76,7 +76,7 @@ jobs:
       - name: Test
         run: poetry run make test-no-qcs
         env:
-          TEST_QUANTUM_PROCESSOR: Aspen-M-3
+          TEST_QUANTUM_PROCESSOR: Ankaa-9Q-3
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -89,10 +89,10 @@ jobs:
     strategy:
       matrix:
         python:
-          - 3.8
           - 3.9
           - "3.10"
           - "3.11"
+          - "3.12"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -120,7 +120,7 @@ jobs:
       - name: Test
         run: poetry run make test-requires-qcs
         env:
-          TEST_QUANTUM_PROCESSOR: Aspen-M-3
+          TEST_QUANTUM_PROCESSOR: Ankaa-9Q-3
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
