@@ -110,7 +110,7 @@ class AzureQuantumComputer(QuantumComputer):
         """
         return AzureProgram(program, skip_quilc=not to_native_gates)
 
-    def run_batch(  # type: ignore
+    def run_batch(
         self,
         executable: AzureProgram,
         memory_map: MemoryMap,
