@@ -24,13 +24,13 @@ __all__ = ["get_qpu", "get_qvm", "AzureQuantumComputer", "AzureProgram"]
 
 from dataclasses import dataclass
 from os import environ
-from typing import Any, Dict, Iterable, List, Optional, Union, cast
+from typing import Any, Iterable, List, Optional, Union, cast
 
 from azure.quantum import Job, Workspace
 from azure.quantum.target.rigetti import InputParams, Result, Rigetti, RigettiTarget
 from lazy_object_proxy import Proxy
 from numpy import split
-from pyquil.api import QAM, ExecutionOptions, MemoryMap, QAMExecutionResult, QuantumComputer, get_qc
+from pyquil.api import QAM, MemoryMap, QAMExecutionResult, QuantumComputer, get_qc
 from pyquil.quil import Program
 from qcs_sdk import ExecutionData, RegisterData, ResultData  # pylint: disable=no-name-in-module
 from qcs_sdk.qvm import QVMResultData  # pylint: disable=no-name-in-module
@@ -243,7 +243,11 @@ class AzureQuantumMachine(QAM[AzureJob]):
         """
         job = execute_response.job
         job.wait_until_completed()
-        result = Result(job)
+        try:
+            result = Result(job)
+        except RuntimeError as e:
+            # XXX move this to azure-quantum itself
+            raise RuntimeError(f"Job {job.details.id} failed: {e}") from e
 
         # pylint: disable-next=fixme
         # TODO: as of https://github.com/microsoft/qdk-python/blob/4d6f7f75c8c7d8467f87936b1aaef449de1e0bf6/azure-quantum/azure/quantum/target/rigetti/result.py#L47
