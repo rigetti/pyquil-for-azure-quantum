@@ -226,7 +226,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
         input_params = InputParams(
             count=executable.num_shots,
             skip_quilc=executable.skip_quilc,
-            substitutions=make_substitutions_from_memory_maps([memory_map]) if memory_map is not None else None,
+            substitutions=_make_substitutions_from_memory_maps([memory_map]) if memory_map is not None else None,
         )
         job = self._target.submit(
             str(executable),
@@ -246,8 +246,9 @@ class AzureQuantumMachine(QAM[AzureJob]):
         try:
             result = Result(job)
         except RuntimeError as e:
-            # XXX move this to azure-quantum itself
-            raise RuntimeError(f"Job {job.details.id} failed: {e}") from e
+            # Most Azure Quantum errors do not include the job ID, so we add it
+            # here for clarity.
+            raise RuntimeError(f"Azure job {job.details.id} failed: {e}") from e
 
         # pylint: disable-next=fixme
         # TODO: as of https://github.com/microsoft/qdk-python/blob/4d6f7f75c8c7d8467f87936b1aaef449de1e0bf6/azure-quantum/azure/quantum/target/rigetti/result.py#L47
@@ -313,11 +314,8 @@ class AzureQuantumMachine(QAM[AzureJob]):
         input_params = InputParams(
             count=executable.num_shots,
             skip_quilc=executable.skip_quilc,
-            substitutions=make_substitutions_from_memory_maps(memory_maps),
+            substitutions=_make_substitutions_from_memory_maps(memory_maps),
         )
-        # XXX TEMP
-        if input_params.substitutions is None and memory_maps:
-            raise ValueError(f"No substitutions derived from {memory_maps}")
         job = self._target.submit(
             str(executable),
             name=name,
@@ -347,7 +345,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
         ]
 
 
-def make_substitutions_from_memory_maps(
+def _make_substitutions_from_memory_maps(
     memory_maps: Iterable[MemoryMap],
 ) -> Optional[Dict[str, List[List[float]]]]:
     if not memory_maps:

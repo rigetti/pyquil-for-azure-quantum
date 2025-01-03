@@ -1,15 +1,14 @@
 """Test running programs on Azure Quantum without any QCS credentials"""
 
-from typing import Dict, List, cast
+from typing import Dict, List
 
 import numpy as np
-from pyquil.api import MemoryMap
 from pyquil.gates import MEASURE, RX
 from pyquil.quil import Program
 from pyquil.quilatom import MemoryReference
 from pyquil.quilbase import Declare
 
-from pyquil_for_azure_quantum import AzureQuantumComputer, AzureQuantumMachine, make_substitutions_from_memory_maps
+from pyquil_for_azure_quantum import AzureQuantumComputer, _make_substitutions_from_memory_maps
 
 PARAMETRIZED = Program(
     Declare("ro", "BIT", 1),
@@ -68,8 +67,9 @@ def test_quil_t(qpu: AzureQuantumComputer) -> None:
 
 
 def test_memory_maps_to_substitutions() -> None:
+    """Test that a list of memory maps is correctly converted to an Azure-style substitution dictionary"""
     executions = [{"theta": [value]} for value in [0, np.pi, 2 * np.pi]]
-    substitutions = make_substitutions_from_memory_maps(executions)
+    substitutions = _make_substitutions_from_memory_maps(executions)
     assert substitutions is not None
     assert substitutions.keys() == {"theta"}
     assert len(substitutions["theta"]) == 3
