@@ -202,7 +202,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
             name=target,
         )
 
-    def execute(  # type: ignore[override]
+    def execute(
         self,
         executable: AzureProgram,
         memory_map: Optional[MemoryMap] = None,
@@ -263,7 +263,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
             data=data,
         )
 
-    def execute_with_memory_map_batch(  # type: ignore[override]
+    def execute_with_memory_map_batch(
         self,
         executable: AzureProgram,
         memory_maps: Iterable[MemoryMap],
