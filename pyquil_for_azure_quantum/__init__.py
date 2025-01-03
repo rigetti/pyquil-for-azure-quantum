@@ -24,7 +24,7 @@ __all__ = ["get_qpu", "get_qvm", "AzureQuantumComputer", "AzureProgram"]
 
 from dataclasses import dataclass
 from os import environ
-from typing import Any, Iterable, List, Optional, Union, cast
+from typing import Any, Dict, Iterable, List, Optional, Union, cast
 
 from azure.quantum import Job, Workspace
 from azure.quantum.target.rigetti import InputParams, Result, Rigetti, RigettiTarget
@@ -106,7 +106,7 @@ class AzureQuantumComputer(QuantumComputer):
     def run_batch(
         self,
         executable: AzureProgram,
-        memory_map: MemoryMap,
+        memory_maps: List[MemoryMap],
         **__kwargs: Any,
     ) -> List[QAMExecutionResult]:
         """Run a sequence of memory values through the program.
@@ -115,7 +115,7 @@ class AzureQuantumComputer(QuantumComputer):
             * [`AzureQuantumMachine.execute_with_memory_map_batch`][pyquil_for_azure_quantum.AzureQuantumMachine.execute_with_memory_map_batch]
         """
         qam = cast(AzureQuantumMachine, self.qam)
-        return qam.execute_with_memory_map_batch(executable, [memory_map])
+        return qam.execute_with_memory_map_batch(executable, memory_maps)
 
 
 def get_qpu(qpu_name: str) -> AzureQuantumComputer:
@@ -226,7 +226,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
         input_params = InputParams(
             count=executable.num_shots,
             skip_quilc=executable.skip_quilc,
-            substitutions={k: [v] for k, v in memory_map.items()} if memory_map is not None else None,
+            substitutions=make_substitutions_from_memory_maps([memory_map]) if memory_map is not None else None,
         )
         job = self._target.submit(
             str(executable),
@@ -262,25 +262,25 @@ class AzureQuantumMachine(QAM[AzureJob]):
             data=data,
         )
 
-    def execute_with_memory_map_batch(  # type: ignore
+    def execute_with_memory_map_batch(
         self,
         executable: AzureProgram,
         memory_maps: Iterable[MemoryMap],
         name: str = "pyquil-azure-job",
-        **kwargs: Any,
+        **_kwargs: Any,
     ) -> List[QAMExecutionResult]:
-        """Run the executable for each set of parameters in the ``memory_map``.
+        """Run the executable for each of the ``memory_maps``.
 
         Args:
             executable: The AzureProgram to run.
-            memory_map: An iterable containing a ``MemoryMaps`` with desired mapping of parameter names to lists of parameter values.
-                Each value is a list as long as the number of slots in the register. So if the register was ``DECLARE theta REAL[2]``
-                then the key in the dictionary would be ``theta`` and the value would be a list of lists of length 2. The entire program
-                will be run (for shot count) as many times as there are values in the list. **All values (outer lists) must be of the same length**.
+            memory_maps: An iterable containing ``MemoryMaps`` with desired mappings of parameter names to parameter values.
+                Each value is a list as long as the number of elements in the register. So if the register was ``DECLARE theta REAL[2]``
+                then the key in the dictionary would be ``theta`` and the value would be a list of length 2. The entire program
+                will be run (for shot count) once for each ``MemoryMap``. (If no memory maps are provided, the program will be run once.)
             name: An optional name for the job which will show up in the Azure Quantum UI.
 
         Returns:
-            A list of ``QAMExecutionResult`` objects, one for each set of parameters.
+            A list of ``QAMExecutionResult`` objects, one for each ``MemoryMap``.
 
         ```pycon
 
@@ -298,7 +298,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
              MEASURE(0, ("ro", 0)), \
         ).wrap_in_numshots_loop(1000)
         >>> compiled = qvm.compile(program)
-        >>> results = qvm.run_batch(compiled, {"theta": [[0.0], [np.pi], [2 * np.pi]]})
+        >>> results = qvm.execute_with_memory_map_batch(compiled, [{"theta": [value]} for value in [0.0, np.pi, 2 * np.pi]}])
         >>> assert len(results) == 3  # 3 values for theta—each a list of length 1
         >>> results_0 = results[0].readout_data["ro"]
         >>> assert len(results_0) == 1000  # 1000 shots
@@ -309,48 +309,56 @@ class AzureQuantumMachine(QAM[AzureJob]):
 
         ```
         """
-        results = []
-        for memory_map in memory_maps:
-            num_params = None
-            for param_name, param_values in memory_map.items():
-                if num_params is None:
-                    num_params = len(param_values)
-                elif num_params != len(param_values):
-                    raise ValueError(
-                        "All parameter values must be of the same length. "
-                        f"{param_name} has length {len(param_values)} but {num_params} were expected."
+        executable = executable.copy()
+        input_params = InputParams(
+            count=executable.num_shots,
+            skip_quilc=executable.skip_quilc,
+            substitutions=make_substitutions_from_memory_maps(memory_maps),
+        )
+        # XXX TEMP
+        if input_params.substitutions is None and memory_maps:
+            raise ValueError(f"No substitutions derived from {memory_maps}")
+        job = self._target.submit(
+            str(executable),
+            name=name,
+            input_params=input_params,
+        )
+        azure_job = AzureJob(job=job, executable=executable)
+        combined_result = self.get_result(azure_job)
+
+        num_executions = len(memory_maps)
+        if num_executions in (0, 1):
+            return [combined_result]
+
+        ro_matrix = combined_result.data.result_data.to_register_map().get_register_matrix("ro")
+        if ro_matrix is None:
+            return []
+
+        return [
+            QAMExecutionResult(
+                executable,
+                ExecutionData(
+                    ResultData.from_qvm(
+                        QVMResultData.from_memory_map(memory={"ro": RegisterData(split_result.tolist())})
                     )
-
-            executable = executable.copy()
-            input_params = InputParams(
-                count=executable.num_shots,
-                skip_quilc=executable.skip_quilc,
-                substitutions=memory_map,
+                ),
             )
-            job = self._target.submit(
-                str(executable),
-                name=name,
-                input_params=input_params,
-            )
-            azure_job = AzureJob(job=job, executable=executable)
-            combined_result = self.get_result(azure_job)
-            if num_params is None or num_params == 1:
-                results.append(combined_result)
-                continue
+            for split_result in split(ro_matrix.to_ndarray(), num_executions)
+        ]
 
-            ro_matrix = combined_result.data.result_data.to_register_map().get_register_matrix("ro")
-            if ro_matrix is None:
-                continue
 
-            results += [
-                QAMExecutionResult(
-                    executable,
-                    ExecutionData(
-                        ResultData.from_qvm(
-                            QVMResultData.from_memory_map(memory={"ro": RegisterData(split_result.tolist())})
-                        )
-                    ),
+def make_substitutions_from_memory_maps(
+    memory_maps: Iterable[MemoryMap],
+) -> Optional[Dict[str, List[List[float]]]]:
+    if not memory_maps:
+        return None
+    substitutions = {k: [v] for k, v in memory_maps[0].items()}
+    for index, memory_map in enumerate(memory_maps[1:]):
+        for key, value in memory_map.items():
+            if key not in substitutions:
+                raise ValueError(
+                    "All MemoryMaps must contain the same keys. "
+                    f"MemoryMap {index+1} contains key {key} which was not in the first MemoryMap."
                 )
-                for split_result in split(ro_matrix.to_ndarray(), num_params)
-            ]
-        return results
+            substitutions[key].append(value)
+    return substitutions
