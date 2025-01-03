@@ -24,7 +24,6 @@ numpy = "^1.21.6"
 scipy = "^1.6.1"
 aiohttp = ">=3.10.10"
 multidict = ">=6.0.5"
-qcs-sdk-python = "0.20.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.1.1"
