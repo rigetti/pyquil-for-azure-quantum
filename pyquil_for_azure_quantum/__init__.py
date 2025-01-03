@@ -24,7 +24,7 @@ __all__ = ["get_qpu", "get_qvm", "AzureQuantumComputer", "AzureProgram"]
 
 from dataclasses import dataclass
 from os import environ
-from typing import Any, Dict, Iterable, List, Optional, Union, cast
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Union, cast
 
 from azure.quantum import Job, Workspace
 from azure.quantum.target.rigetti import InputParams, Result, Rigetti, RigettiTarget
@@ -106,7 +106,7 @@ class AzureQuantumComputer(QuantumComputer):
     def run_batch(
         self,
         executable: AzureProgram,
-        memory_maps: List[MemoryMap],
+        memory_maps: Sequence[MemoryMap],
         **__kwargs: Any,
     ) -> List[QAMExecutionResult]:
         """Run a sequence of memory values through the program.
@@ -263,7 +263,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
             data=data,
         )
 
-    def execute_with_memory_map_batch(
+    def execute_with_memory_map_batch(  # type: ignore[override]
         self,
         executable: AzureProgram,
         memory_maps: Iterable[MemoryMap],
@@ -311,6 +311,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
         ```
         """
         executable = executable.copy()
+        memory_maps = list(memory_maps)
         input_params = InputParams(
             count=executable.num_shots,
             skip_quilc=executable.skip_quilc,
@@ -346,17 +347,27 @@ class AzureQuantumMachine(QAM[AzureJob]):
 
 
 def _make_substitutions_from_memory_maps(
-    memory_maps: Iterable[MemoryMap],
+    memory_maps: Sequence[MemoryMap],
 ) -> Optional[Dict[str, List[List[float]]]]:
+    """
+    Helper function to convert a list of MemoryMaps to the format expected by Azure Quantum.
+    """
+
     if not memory_maps:
         return None
-    substitutions = {k: [v] for k, v in memory_maps[0].items()}
+
+    # Function to convert the values for a single key in a single MemoryMap to
+    # the format expected by Azure Quantum
+    def execution_values(value: Union[Sequence[int], Sequence[float]]) -> List[float]:
+        return list(map(float, value))
+
+    substitutions = {k: [execution_values(v)] for k, v in memory_maps[0].items()}
     for index, memory_map in enumerate(memory_maps[1:]):
-        for key, value in memory_map.items():
+        for key, memory_values in memory_map.items():
             if key not in substitutions:
                 raise ValueError(
                     "All MemoryMaps must contain the same keys. "
                     f"MemoryMap {index+1} contains key {key} which was not in the first MemoryMap."
                 )
-            substitutions[key].append(value)
+            substitutions[key].append(execution_values(memory_values))
     return substitutions

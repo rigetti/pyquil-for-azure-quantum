@@ -73,6 +73,9 @@ def test_memory_maps_to_substitutions() -> None:
     assert substitutions is not None
     assert substitutions.keys() == {"theta"}
     assert len(substitutions["theta"]) == 3
+    assert substitutions["theta"][0][0] == 0
+    assert substitutions["theta"][1][0] == np.pi
+    assert substitutions["theta"][2][0] == np.pi * 2
 
 
 # pylint: disable-next=invalid-name
