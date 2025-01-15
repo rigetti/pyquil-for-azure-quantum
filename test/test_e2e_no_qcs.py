@@ -8,7 +8,7 @@ from pyquil.quil import Program
 from pyquil.quilatom import MemoryReference
 from pyquil.quilbase import Declare
 
-from pyquil_for_azure_quantum import AzureQuantumComputer
+from pyquil_for_azure_quantum import AzureQuantumComputer, _make_substitutions_from_memory_maps
 
 PARAMETRIZED = Program(
     Declare("ro", "BIT", 1),
@@ -66,13 +66,25 @@ def test_quil_t(qpu: AzureQuantumComputer) -> None:
     assert np.mean(results) > 0.5
 
 
+def test_memory_maps_to_substitutions() -> None:
+    """Test that a list of memory maps is correctly converted to an Azure-style substitution dictionary"""
+    executions = [{"theta": [value]} for value in [0, np.pi, 2 * np.pi]]
+    substitutions = _make_substitutions_from_memory_maps(executions)
+    assert substitutions is not None
+    assert substitutions.keys() == {"theta"}
+    assert len(substitutions["theta"]) == 3
+    assert substitutions["theta"][0][0] == 0
+    assert substitutions["theta"][1][0] == np.pi
+    assert substitutions["theta"][2][0] == np.pi * 2
+
+
 # pylint: disable-next=invalid-name
-def test_run_batch(qc: AzureQuantumComputer) -> None:
-    """Test the ``run_batch`` interface which should be much faster than normal parametrization"""
+def test_run_with_memory_map_batch(qc: AzureQuantumComputer) -> None:
+    """Test the ``run_with_memory_map_batch`` interface"""
     compiled = qc.compile(PARAMETRIZED)
 
-    memory_map: Dict[str, List[List[float]]] = {"theta": [[0], [np.pi], [2 * np.pi]]}
-    results = qc.run_batch(compiled, memory_map)
+    executions = [{"theta": [value]} for value in [0, np.pi, 2 * np.pi]]
+    results = qc.run_with_memory_map_batch(compiled, executions)
 
     results_0 = results[0].get_register_map().get("ro")
     assert results_0 is not None
