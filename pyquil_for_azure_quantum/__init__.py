@@ -62,6 +62,11 @@ class AzureProgram(ObjectProxy, Program):  # type: ignore
 
 
 # pylint: disable-next=too-few-public-methods
+# AzureQuantumComputer provides an API for executing jobs using the Rigetti
+# Azure integration. We intentionally do not support running arbitrary QCS
+# `Program` objects with this class; `AzureProgram` is used instead. Our
+# overrides are thus incompatible with the base class, so we disable the type
+# check wherever `AzureProgram` is used as an argument.
 class AzureQuantumComputer(QuantumComputer):
     """
     A ``pyquil.QuantumComputer`` that runs on Azure Quantum.
@@ -103,19 +108,84 @@ class AzureQuantumComputer(QuantumComputer):
         """
         return AzureProgram(program, skip_quilc=not to_native_gates)
 
-    def run_batch(
+    def run_with_memory_map_batch(
         self,
-        executable: AzureProgram,
-        memory_maps: Sequence[MemoryMap],
+        # See the comment on the `AzureQuantumComputer` class for why the type error is ignored.
+        executable: AzureProgram,  # type: ignore[override]
+        memory_maps: Iterable[MemoryMap],
         **__kwargs: Any,
     ) -> List[QAMExecutionResult]:
-        """Run a sequence of memory values through the program.
+        """Run the executable for each of the ``memory_maps``.
+
+        Args:
+            executable: The AzureProgram to run.
+            memory_maps: An iterable containing ``MemoryMaps`` with desired mappings of parameter names to parameter values.
+                Each value is a list as long as the number of elements in the register. So if the register was ``DECLARE theta REAL[2]``
+                then the key in the dictionary would be ``theta`` and the value would be a list of length 2. The entire program
+                will be run (for shot count) once for each ``MemoryMap``. (If no memory maps are provided, the program will be run once.)
+            name: An optional name for the job which will show up in the Azure Quantum UI.
+
+        Returns:
+            A list of ``QAMExecutionResult`` objects, one for each ``MemoryMap``.
+
+        ```pycon
+
+        >>> import numpy as np
+        >>> from pyquil import Program
+        >>> from pyquil.gates import CNOT, MEASURE, RX, H
+        >>> from pyquil.quilatom import MemoryReference
+        >>> from pyquil.quilbase import Declare
+        >>> from pyquil_for_azure_quantum import get_qvm
+        >>> qvm = get_qvm()
+        >>> program = Program(\
+             Declare("ro", "BIT", 1), \
+             Declare("theta", "REAL", 1), \
+             RX(MemoryReference("theta"), 0), \
+             MEASURE(0, ("ro", 0)), \
+        ).wrap_in_numshots_loop(1000)
+        >>> compiled = qvm.compile(program)
+        >>> results = qvm.run_with_memory_map_batch(compiled, [{"theta": [value]} for value in [0.0, np.pi, 2 * np.pi]}])
+        >>> assert len(results) == 3  # 3 values for theta—each a list of length 1
+        >>> results_0 = results[0].readout_data["ro"]
+        >>> assert len(results_0) == 1000  # 1000 shots
+        >>> assert np.mean(results_0) == 0
+        >>> results_pi = results[1].readout_data["ro"]
+        >>> assert len(results_pi) == 1000
+        >>> assert np.mean(results_pi) == 1
+
+        ```
 
         See Also:
             * [`AzureQuantumMachine.execute_with_memory_map_batch`][pyquil_for_azure_quantum.AzureQuantumMachine.execute_with_memory_map_batch]
         """
         qam = cast(AzureQuantumMachine, self.qam)
-        return qam.execute_with_memory_map_batch(executable, memory_maps)
+        azure_job = qam.execute_with_memory_map_batch(executable, memory_maps)
+        # `execute_with_memory_map_batch` always returns a list of length 1.
+        assert len(azure_job) == 1
+
+        combined_result = qam.get_result(azure_job[0])
+
+        # We expect that `memory_maps` is always a list already, so this should
+        # not have a performance impact.
+        num_executions = len(list(memory_maps))
+        if num_executions in (0, 1):
+            return [combined_result]
+
+        ro_matrix = combined_result.data.result_data.to_register_map().get_register_matrix("ro")
+        if ro_matrix is None:
+            return []
+
+        return [
+            QAMExecutionResult(
+                executable,
+                ExecutionData(
+                    ResultData.from_qvm(
+                        QVMResultData.from_memory_map(memory={"ro": RegisterData(split_result.tolist())})
+                    )
+                ),
+            )
+            for split_result in split(ro_matrix.to_ndarray(), num_executions)
+        ]
 
 
 def get_qpu(qpu_name: str) -> AzureQuantumComputer:
@@ -170,6 +240,10 @@ class AzureJob:
     executable: AzureProgram
 
 
+# AzureQuantumMachine, like AzureQuantumComputer, intentionally does not support
+# running arbitrary QCS `Program` objects; `AzureProgram` is used instead. Our
+# overrides are thus incompatible with the base class, so we disable the type
+# check wherever `AzureProgram` is used as an argument.
 class AzureQuantumMachine(QAM[AzureJob]):
     """An implementation of QAM which runs programs using Azure Quantum
 
@@ -204,10 +278,10 @@ class AzureQuantumMachine(QAM[AzureJob]):
 
     def execute(
         self,
-        executable: AzureProgram,
+        # See the comment on the `AzureQuantumMachine` class for why the type error is ignored.
+        executable: AzureProgram,  # type: ignore[override]
         memory_map: Optional[MemoryMap] = None,
-        name: str = "pyquil-azure-job",
-        **_kwargs: Any,  # unused, but defined here to match QAM superclass.
+        **kwargs: Any,  # used for `name`, to ensure signature compatibility with QAM
     ) -> AzureJob:
         """Run an AzureProgram on Azure Quantum. Unlike normal QAM this does not accept a ``QuantumExecutable``.
 
@@ -222,6 +296,10 @@ class AzureQuantumMachine(QAM[AzureJob]):
             A ``Job`` which can be used to check the status of the job or retrieve a ``QAMExecutionResult`` via
             ``get_result()``.
         """
+        name = kwargs.get(
+            "name",
+            "pyquil-azure-job",
+        )
         executable = executable.copy()
         input_params = InputParams(
             count=executable.num_shots,
@@ -265,11 +343,11 @@ class AzureQuantumMachine(QAM[AzureJob]):
 
     def execute_with_memory_map_batch(
         self,
-        executable: AzureProgram,
+        # See the comment on the `AzureQuantumMachine` class for why the type error is ignored.
+        executable: AzureProgram,  # type: ignore[override]
         memory_maps: Iterable[MemoryMap],
-        name: str = "pyquil-azure-job",
-        **_kwargs: Any,
-    ) -> List[QAMExecutionResult]:
+        **kwargs: Any,  # used for `name`, to ensure signature compatibility with QAM
+    ) -> List[AzureJob]:
         """Run the executable for each of the ``memory_maps``.
 
         Args:
@@ -281,35 +359,15 @@ class AzureQuantumMachine(QAM[AzureJob]):
             name: An optional name for the job which will show up in the Azure Quantum UI.
 
         Returns:
-            A list of ``QAMExecutionResult`` objects, one for each ``MemoryMap``.
+            A list of ``AzureJob`` object; because ``AzureJob`` is not
+            considered done until the entire batch is done, this is always a
+            list of length one.
 
-        ```pycon
-
-        >>> import numpy as np
-        >>> from pyquil import Program
-        >>> from pyquil.gates import CNOT, MEASURE, RX, H
-        >>> from pyquil.quilatom import MemoryReference
-        >>> from pyquil.quilbase import Declare
-        >>> from pyquil_for_azure_quantum import get_qvm
-        >>> qvm = get_qvm()
-        >>> program = Program(\
-             Declare("ro", "BIT", 1), \
-             Declare("theta", "REAL", 1), \
-             RX(MemoryReference("theta"), 0), \
-             MEASURE(0, ("ro", 0)), \
-        ).wrap_in_numshots_loop(1000)
-        >>> compiled = qvm.compile(program)
-        >>> results = qvm.execute_with_memory_map_batch(compiled, [{"theta": [value]} for value in [0.0, np.pi, 2 * np.pi]}])
-        >>> assert len(results) == 3  # 3 values for theta—each a list of length 1
-        >>> results_0 = results[0].readout_data["ro"]
-        >>> assert len(results_0) == 1000  # 1000 shots
-        >>> assert np.mean(results_0) == 0
-        >>> results_pi = results[1].readout_data["ro"]
-        >>> assert len(results_pi) == 1000
-        >>> assert np.mean(results_pi) == 1
-
-        ```
         """
+        name = kwargs.get(
+            "name",
+            "pyquil-azure-job",
+        )
         executable = executable.copy()
         memory_maps = list(memory_maps)
         input_params = InputParams(
@@ -323,27 +381,7 @@ class AzureQuantumMachine(QAM[AzureJob]):
             input_params=input_params,
         )
         azure_job = AzureJob(job=job, executable=executable)
-        combined_result = self.get_result(azure_job)
-
-        num_executions = len(memory_maps)
-        if num_executions in (0, 1):
-            return [combined_result]
-
-        ro_matrix = combined_result.data.result_data.to_register_map().get_register_matrix("ro")
-        if ro_matrix is None:
-            return []
-
-        return [
-            QAMExecutionResult(
-                executable,
-                ExecutionData(
-                    ResultData.from_qvm(
-                        QVMResultData.from_memory_map(memory={"ro": RegisterData(split_result.tolist())})
-                    )
-                ),
-            )
-            for split_result in split(ro_matrix.to_ndarray(), num_executions)
-        ]
+        return [azure_job]
 
 
 def _make_substitutions_from_memory_maps(

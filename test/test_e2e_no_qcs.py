@@ -84,7 +84,7 @@ def test_run_batch(qc: AzureQuantumComputer) -> None:
     compiled = qc.compile(PARAMETRIZED)
 
     executions = [{"theta": [value]} for value in [0, np.pi, 2 * np.pi]]
-    results = qc.run_batch(compiled, executions)
+    results = qc.run_with_memory_map_batch(compiled, executions)
 
     results_0 = results[0].get_register_map().get("ro")
     assert results_0 is not None
