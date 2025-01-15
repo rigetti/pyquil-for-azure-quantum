@@ -79,8 +79,8 @@ def test_memory_maps_to_substitutions() -> None:
 
 
 # pylint: disable-next=invalid-name
-def test_run_batch(qc: AzureQuantumComputer) -> None:
-    """Test the ``run_batch`` interface which should be much faster than normal parametrization"""
+def test_run_with_memory_map_batch(qc: AzureQuantumComputer) -> None:
+    """Test the ``run_with_memory_map_batch`` interface"""
     compiled = qc.compile(PARAMETRIZED)
 
     executions = [{"theta": [value]} for value in [0, np.pi, 2 * np.pi]]
