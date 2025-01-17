@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyquil-for-azure-quantum"
-version = "0.0.3"
+version = "0.1.0"
 description = "Run Quil programs on Microsoft Azure Quantum using pyQuil"
 authors = ["Dylan Anthony <danthony@rigetti.com>"]
 license = "Apache-2.0"
